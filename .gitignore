@@ -1,0 +1,139 @@
+# Compiled class file
+*.class
+
+# Log file
+*.log
+
+# BlueJ files
+*.ctxt
+
+# Mobile Tools for Java (J2ME)
+.mtj.tmp/
+
+# Package Files #
+*.jar
+*.war
+*.nar
+*.ear
+*.zip
+*.tar.gz
+*.rar
+
+# virtual machine crash logs
+hs_err_pid*
+replay_pid*
+
+# Maven
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+buildNumber.properties
+.mvn/timing.properties
+.mvn/wrapper/maven-wrapper.jar
+
+# IDE Files
+.vscode/
+.idea/
+*.iws
+*.iml
+*.ipr
+.project
+.classpath
+.settings/
+bin/
+.metadata/
+.recommenders/
+
+# OS Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# KITE API CREDENTIALS - NEVER COMMIT THESE
+
+config/kite_token.txt
+config/kite_api_key.txt
+config/kite_api_secret.txt
+config/access_token.txt
+config/credentials.txt
+config/*.key
+config/*.secret
+config/*.token
+
+# Environment files with sensitive data
+.env
+.env.local
+.env.*.local
+application-local.properties
+application-prod.properties
+application-secrets.properties
+
+# Any file containing "kite" and sensitive extensions
+*kite*.properties
+*kite*.txt
+*kite*.json
+*kite*.yml
+*kite*.yaml
+
+# APPLICATION SPECIFIC
+logs/
+*.log
+temp/
+tmp/
+*.tmp
+
+# JaCoCo coverage reports
+jacoco.exec
+*.exec
+jacoco/
+coverage/
+
+# Test output
+test-output/
+test-results/
+
+# Spring Boot
+spring.log
+application.pid
+
+# Database files (if using local DB)
+*.db
+*.sqlite
+*.sqlite3
+
+# Backup files
+*.bak
+*.backup
+*~
+
+# Any personal notes or documentation
+NOTES.md
+TODO.md
+personal/
+docs/personal/
+
+# Docker
+.dockerignore
+docker-compose.override.yml
+
+# Kubernetes secrets
+*secret*.yaml
+*secret*.yml
+
+# Any credentials or API keys regardless of location
+**/credentials/**
+**/secrets/**
+**/*password*
+**/*secret*
+**/*key*.txt
+**/*token*.txt
+**/*api*.key
