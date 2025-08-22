@@ -1,6 +1,7 @@
 package com.stockanalysis.service;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
@@ -15,7 +16,7 @@ import java.util.*;
 
 /**
  * Service to handle Kite API data fetching operations
- * This service provides methods to interact with Kite Connect API for fetching stock data
+ * FIXED: Correct authorization header format
  */
 @Service
 public class KiteApiService {
@@ -28,15 +29,14 @@ public class KiteApiService {
     @Autowired
     private KiteAuthService kiteAuthService;
     
+    @Value("${kite.api.key}")
+    private String apiKey;  // ADDED: Need API key for authorization header
+    
     private final ObjectMapper objectMapper = new ObjectMapper();
     
     /**
-     * Fetch historical data for a specific instrument from Kite API
-     * 
-     * @param instrumentToken The instrument token for the stock
-     * @param fromDate Start date for historical data
-     * @param toDate End date for historical data
-     * @return JsonNode containing the historical data
+     * FIXED: Fetch historical data with correct authorization header format
+     * Kite requires: "token api_key:access_token"
      */
     public JsonNode fetchHistoricalData(String instrumentToken, LocalDate fromDate, LocalDate toDate) {
         try {
@@ -49,7 +49,8 @@ public class KiteApiService {
             
             logger.debug("🔍 Fetching historical data: {} from {} to {}", instrumentToken, fromDate, toDate);
             
-            String authHeader = "token " + kiteAuthService.getCurrentAccessToken();
+            // FIXED: Correct authorization header format
+            String authHeader = "token " + apiKey + ":" + kiteAuthService.getCurrentAccessToken();
             
             String response = kiteWebClient
                 .get()
@@ -90,10 +91,7 @@ public class KiteApiService {
     }
     
     /**
-     * Fetch instruments list from Kite API (returns CSV format)
-     * 
-     * @param exchange The exchange name (NSE, BSE, etc.)
-     * @return String containing CSV data of instruments
+     * FIXED: Fetch instruments list with correct authorization header
      */
     public String fetchInstruments(String exchange) {
         try {
@@ -103,7 +101,8 @@ public class KiteApiService {
             
             logger.debug("🔍 Fetching instruments for exchange: {}", exchange);
             
-            String authHeader = "token " + kiteAuthService.getCurrentAccessToken();
+            // FIXED: Correct authorization header format
+            String authHeader = "token " + apiKey + ":" + kiteAuthService.getCurrentAccessToken();
             
             String response = kiteWebClient
                 .get()
@@ -128,9 +127,7 @@ public class KiteApiService {
     }
     
     /**
-     * Fetch user profile (for testing authentication)
-     * 
-     * @return JsonNode containing user profile data
+     * FIXED: Fetch user profile with correct authorization header
      */
     public JsonNode fetchProfile() {
         try {
@@ -140,7 +137,8 @@ public class KiteApiService {
             
             logger.debug("Fetching user profile");
             
-            String authHeader = "token " + kiteAuthService.getCurrentAccessToken();
+            // FIXED: Correct authorization header format
+            String authHeader = "token " + apiKey + ":" + kiteAuthService.getCurrentAccessToken();
             
             String response = kiteWebClient
                 .get()
@@ -171,10 +169,7 @@ public class KiteApiService {
     }
     
     /**
-     * Fetch current market quotes for given instruments
-     * 
-     * @param instruments List of instrument tokens
-     * @return JsonNode containing quote data
+     * FIXED: Fetch quotes with correct authorization header
      */
     public JsonNode fetchQuotes(List<String> instruments) {
         try {
@@ -184,7 +179,8 @@ public class KiteApiService {
             
             logger.debug("Fetching quotes for {} instruments", instruments.size());
             
-            String authHeader = "token " + kiteAuthService.getCurrentAccessToken();
+            // FIXED: Correct authorization header format
+            String authHeader = "token " + apiKey + ":" + kiteAuthService.getCurrentAccessToken();
             String instrumentsParam = String.join(",", instruments);
             
             String response = kiteWebClient
@@ -220,8 +216,6 @@ public class KiteApiService {
     
     /**
      * Test API connectivity by fetching user profile
-     * 
-     * @return true if connection successful, false otherwise
      */
     public boolean testConnection() {
         try {
@@ -236,7 +230,6 @@ public class KiteApiService {
     
     /**
      * Rate limiting helper - ensures we don't exceed Kite API limits (3 req/sec)
-     * Call this method between API requests to respect rate limits
      */
     public void rateLimit() {
         try {
@@ -248,9 +241,7 @@ public class KiteApiService {
     }
     
     /**
-     * Get trading holidays from Kite API
-     * 
-     * @return JsonNode containing holiday data
+     * FIXED: Get trading holidays with correct authorization header
      */
     public JsonNode fetchHolidays() {
         try {
@@ -260,7 +251,8 @@ public class KiteApiService {
             
             logger.debug("Fetching trading holidays");
             
-            String authHeader = "token " + kiteAuthService.getCurrentAccessToken();
+            // FIXED: Correct authorization header format
+            String authHeader = "token " + apiKey + ":" + kiteAuthService.getCurrentAccessToken();
             
             String response = kiteWebClient
                 .get()
@@ -287,8 +279,6 @@ public class KiteApiService {
     
     /**
      * Check if market is open
-     * 
-     * @return true if market is open, false otherwise
      */
     public boolean isMarketOpen() {
         try {
@@ -313,9 +303,6 @@ public class KiteApiService {
     
     /**
      * Validate instrument token format
-     * 
-     * @param instrumentToken The token to validate
-     * @return true if valid format, false otherwise
      */
     public boolean isValidInstrumentToken(String instrumentToken) {
         if (instrumentToken == null || instrumentToken.trim().isEmpty()) {
@@ -333,21 +320,18 @@ public class KiteApiService {
     }
     
     /**
-     * Build authorization header for API requests
-     * 
-     * @return Authorization header string
+     * FIXED: Build authorization header for API requests
      */
     public String getAuthorizationHeader() {
         if (!kiteAuthService.isAuthenticated()) {
             throw new RuntimeException("Not authenticated");
         }
-        return "token " + kiteAuthService.getCurrentAccessToken();
+        // FIXED: Return correct format
+        return "token " + apiKey + ":" + kiteAuthService.getCurrentAccessToken();
     }
     
     /**
      * Get API usage statistics (for monitoring)
-     * 
-     * @return Map containing usage stats
      */
     public Map<String, Object> getApiUsageStats() {
         Map<String, Object> stats = new HashMap<>();
@@ -356,6 +340,8 @@ public class KiteApiService {
         stats.put("maxRequestsPerSecond", 3);
         stats.put("connectionHealthy", testConnection());
         stats.put("timestamp", java.time.LocalDateTime.now());
+        stats.put("apiKey", apiKey != null ? apiKey.substring(0, 4) + "****" : "NOT_SET");
+        stats.put("authHeaderFormat", "token api_key:access_token");
         
         return stats;
     }

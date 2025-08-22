@@ -6,6 +6,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.context.annotation.Bean;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+import org.springframework.lang.NonNull;  // FIXED: Added missing import
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -42,8 +43,8 @@ public class StockAnalyzerApplication {
         logger.info("Default timezone: {}", TimeZone.getDefault().getID());
         logger.info("Server will start on: http://localhost:8081/stock-analyzer");
         logger.info("Real-time data source: Kite Connect API");
-        logger.info("Database: MongoDB (nifty50-analyzer)");
-        logger.info("Features: Real API, Scheduled Jobs, Enhanced Analytics");
+        logger.info("Database: MongoDB (stock-analyzer-ma)");
+        logger.info("Features: Real API, Scheduled Jobs, Enhanced Analytics, Moving Averages");
         logger.info("===============================================");
     }
     
@@ -54,7 +55,7 @@ public class StockAnalyzerApplication {
     public WebMvcConfigurer corsConfigurer() {
         return new WebMvcConfigurer() {
             @Override
-            public void addCorsMappings(CorsRegistry registry) {
+            public void addCorsMappings(@NonNull CorsRegistry registry) {  // FIXED: Added @NonNull annotation
                 registry.addMapping("/api/**")
                         .allowedOrigins("*")
                         .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")

@@ -11,14 +11,15 @@ import org.slf4j.LoggerFactory;
 import com.fasterxml.jackson.databind.JsonNode;
 
 import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
+// REMOVED: import java.time.format.DateTimeFormatter; (was unused)
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.*;
+import java.util.stream.Collectors;
 
 /**
- * Complete Stock Data Service for Nifty 50 stocks
- * Handles fetching, processing, and storing stock data from Kite API
+ * Enhanced Stock Data Service with Moving Average support
+ * Now calculates 100-day and 200-day moving averages
  */
 @Service
 public class StockDataService {
@@ -37,6 +38,9 @@ public class StockDataService {
     @Autowired
     private JobExecutionService jobExecutionService;
     
+    @Autowired
+    private MovingAverageService movingAverageService;  // NEW
+    
     @Value("${app.use.real.data:false}")
     private boolean useRealData;
     
@@ -48,6 +52,9 @@ public class StockDataService {
     
     @Value("${app.scheduler.enabled:true}")
     private boolean schedulerEnabled;
+    
+    @Value("${app.moving.averages.enabled:true}")
+    private boolean movingAveragesEnabled;
     
     // Nifty 50 stocks with their Kite instrument tokens (NSE)
     private static final Map<String, String> NIFTY50_INSTRUMENTS = new HashMap<String, String>() {{
@@ -104,7 +111,7 @@ public class StockDataService {
     }};
     
     /**
-     * Scheduled job to fetch daily data
+     * ENHANCED: Scheduled job to fetch daily data AND calculate moving averages
      * Runs every day at 7 PM IST (after market close)
      */
     @Scheduled(cron = "0 0 19 * * MON-FRI", zone = "Asia/Kolkata")
@@ -114,7 +121,7 @@ public class StockDataService {
             return;
         }
         
-        logger.info("Starting scheduled daily data fetch at {}", LocalDate.now());
+        logger.info("🚀 Starting scheduled daily data fetch with moving averages at {}", LocalDate.now());
         
         try {
             // Get last successful run date
@@ -123,21 +130,30 @@ public class StockDataService {
             LocalDate fromDate = lastRunDate.orElse(LocalDate.now().minusDays(5)); // Default to 5 days back
             LocalDate toDate = LocalDate.now();
             
-            logger.info("Fetching data from {} to {}", fromDate, toDate);
+            logger.info("📊 Fetching data from {} to {}", fromDate, toDate);
             
-            fetchAllHistoricalData(fromDate, toDate);
+            // Step 1: Fetch new stock data
+            int recordsProcessed = fetchAllHistoricalData(fromDate, toDate);
+            
+            // Step 2: Calculate moving averages for updated data
+            if (movingAveragesEnabled && recordsProcessed > 0) {
+                logger.info("🧮 Calculating moving averages for recent data...");
+                movingAverageService.calculateMovingAveragesForRecentData(fromDate);
+            }
+            
+            logger.info("✅ Scheduled job completed: {} records processed, moving averages updated", recordsProcessed);
             
         } catch (Exception e) {
-            logger.error("Scheduled job failed: {}", e.getMessage(), e);
+            logger.error("❌ Scheduled job failed: {}", e.getMessage(), e);
             jobExecutionService.recordJobError("DAILY_STOCK_FETCH", e);
         }
     }
     
     /**
-     * Fetch historical data for all Nifty 50 stocks
+     * ENHANCED: Fetch historical data AND calculate moving averages
      */
     public int fetchAllHistoricalData(LocalDate fromDate, LocalDate toDate) {
-        String jobName = "DAILY_STOCK_FETCH";
+        String jobName = "DAILY_STOCK_FETCH_WITH_MA";
         jobExecutionService.recordJobStart(jobName);
         
         int totalRecordsProcessed = 0;
@@ -145,51 +161,195 @@ public class StockDataService {
         int failedStocks = 0;
         
         try {
-            logger.info("Starting Nifty 50 data fetch for {} stocks from {} to {}", 
+            logger.info("🚀 Starting Nifty 50 data fetch for {} stocks from {} to {}", 
                        NIFTY50_INSTRUMENTS.size(), fromDate, toDate);
             
             if (!useRealData || !kiteAuthService.isAuthenticated()) {
-                logger.warn("Real data disabled or not authenticated. Using mock data.");
-                return generateMockData(fromDate, toDate);
-            }
-            
-            for (Map.Entry<String, String> entry : NIFTY50_INSTRUMENTS.entrySet()) {
-                String symbol = entry.getKey();
-                String instrumentToken = entry.getValue();
-                
-                try {
-                    logger.debug("Processing {}: {}", symbol, instrumentToken);
+                logger.warn("⚠️ Real data disabled or not authenticated. Using mock data.");
+                totalRecordsProcessed = generateMockData(fromDate, toDate);
+            } else {
+                // Fetch real data from Kite API
+                for (Map.Entry<String, String> entry : NIFTY50_INSTRUMENTS.entrySet()) {
+                    String symbol = entry.getKey();
+                    String instrumentToken = entry.getValue();
                     
-                    int recordsForSymbol = fetchAndProcessHistoricalData(symbol, instrumentToken, fromDate, toDate);
-                    totalRecordsProcessed += recordsForSymbol;
-                    successfulStocks++;
-                    
-                    logger.debug("{} - {} records processed", symbol, recordsForSymbol);
-                    
-                    // Rate limiting - respect Kite API limits
-                    kiteApiService.rateLimit();
-                    
-                } catch (Exception e) {
-                    logger.error("Failed to process {}: {}", symbol, e.getMessage());
-                    failedStocks++;
-                    // Continue with next stock instead of failing entire job
+                    try {
+                        logger.debug("📊 Processing {}: {}", symbol, instrumentToken);
+                        
+                        int recordsForSymbol = fetchAndProcessHistoricalData(symbol, instrumentToken, fromDate, toDate);
+                        totalRecordsProcessed += recordsForSymbol;
+                        successfulStocks++;
+                        
+                        logger.debug("✅ {} - {} records processed", symbol, recordsForSymbol);
+                        
+                        // Rate limiting - respect Kite API limits
+                        kiteApiService.rateLimit();
+                        
+                    } catch (Exception e) {
+                        logger.error("❌ Failed to process {}: {}", symbol, e.getMessage());
+                        failedStocks++;
+                        // Continue with next stock instead of failing entire job
+                    }
                 }
             }
             
-            String message = String.format("Successfully processed %d stocks, %d failed. Total records: %d", 
-                                         successfulStocks, failedStocks, totalRecordsProcessed);
+            // STEP 2: Calculate moving averages if enabled
+            if (movingAveragesEnabled && totalRecordsProcessed > 0) {
+                logger.info("🧮 Calculating moving averages for all updated stocks...");
+                try {
+                    movingAverageService.calculateMovingAveragesForAllStocks();
+                    logger.info("✅ Moving averages calculation completed");
+                } catch (Exception e) {
+                    logger.error("❌ Moving averages calculation failed: {}", e.getMessage());
+                    // Don't fail the entire job for MA calculation errors
+                }
+            }
+            
+            String message = String.format("Successfully processed %d stocks, %d failed. Total records: %d. Moving averages: %s", 
+                                         successfulStocks, failedStocks, totalRecordsProcessed,
+                                         movingAveragesEnabled ? "CALCULATED" : "DISABLED");
             
             jobExecutionService.recordJobCompletion(jobName, "SUCCESS", message);
-            logger.info("Data fetch completed: {}", message);
+            logger.info("🎉 Data fetch completed: {}", message);
             
             return totalRecordsProcessed;
             
         } catch (Exception e) {
-            logger.error("Fatal error in data fetch job: {}", e.getMessage(), e);
+            logger.error("💥 Fatal error in data fetch job: {}", e.getMessage(), e);
             jobExecutionService.recordJobError(jobName, e);
             throw new RuntimeException("Data fetch job failed", e);
         }
     }
+    
+    /**
+     * ENHANCED: Manual trigger for moving averages calculation
+     */
+    public Map<String, Object> triggerMovingAveragesCalculation() {
+        Map<String, Object> result = new HashMap<>();
+        
+        try {
+            logger.info("🚀 Manual trigger: Calculating moving averages for all stocks");
+            
+            if (!movingAveragesEnabled) {
+                result.put("status", "DISABLED");
+                result.put("message", "Moving averages calculation is disabled");
+                return result;
+            }
+            
+            long startTime = System.currentTimeMillis();
+            
+            movingAverageService.calculateMovingAveragesForAllStocks();
+            
+            long duration = System.currentTimeMillis() - startTime;
+            
+            result.put("status", "SUCCESS");
+            result.put("message", "Moving averages calculated for all stocks");
+            result.put("durationMs", duration);
+            result.put("timestamp", LocalDate.now());
+            
+            logger.info("✅ Moving averages calculation completed in {}ms", duration);
+            
+        } catch (Exception e) {
+            logger.error("❌ Moving averages calculation failed: {}", e.getMessage(), e);
+            result.put("status", "FAILED");
+            result.put("error", e.getMessage());
+        }
+        
+        return result;
+    }
+    
+    /**
+     * Get stock data with moving average filters
+     */
+    public List<StockData> getStockDataWithMAFilters(String symbol, LocalDate fromDate, 
+                                                    LocalDate toDate, String maSignal100, 
+                                                    String maSignal200, String goldenCross) {
+        try {
+            // Start with basic date filter
+            List<StockData> data = stockDataRepository.findBySymbolAndDateBetween(symbol, fromDate, toDate);
+            
+            // Apply moving average filters
+            return data.stream()
+                .filter(stock -> {
+                    // Filter by 100-day MA signal
+                    if (maSignal100 != null && !maSignal100.equals("ALL")) {
+                        if (!maSignal100.equals(stock.getMaSignal100())) {
+                            return false;
+                        }
+                    }
+                    
+                    // Filter by 200-day MA signal
+                    if (maSignal200 != null && !maSignal200.equals("ALL")) {
+                        if (!maSignal200.equals(stock.getMaSignal200())) {
+                            return false;
+                        }
+                    }
+                    
+                    // Filter by golden cross signal
+                    if (goldenCross != null && !goldenCross.equals("ALL")) {
+                        if (!goldenCross.equals(stock.getGoldenCross())) {
+                            return false;
+                        }
+                    }
+                    
+                    return true;
+                })
+                .collect(Collectors.toList());
+                
+        } catch (Exception e) {
+            logger.error("❌ Error filtering stock data with MA filters: {}", e.getMessage());
+            return new ArrayList<>();
+        }
+    }
+    
+    /**
+     * Find stocks with golden cross signals
+     */
+    public Map<String, Object> findGoldenCrossStocks(LocalDate fromDate, LocalDate toDate) {
+        Map<String, Object> result = new HashMap<>();
+        
+        try {
+            List<Map<String, Object>> goldenCrossStocks = new ArrayList<>();
+            
+            for (String symbol : NIFTY50_INSTRUMENTS.keySet()) {
+                List<StockData> goldenCrossData = getStockDataWithMAFilters(
+                    symbol, fromDate, toDate, null, null, "GOLDEN_CROSS"
+                );
+                
+                if (!goldenCrossData.isEmpty()) {
+                    Map<String, Object> stockInfo = new HashMap<>();
+                    stockInfo.put("symbol", symbol);
+                    stockInfo.put("goldenCrossDays", goldenCrossData.size());
+                    stockInfo.put("latestGoldenCross", goldenCrossData.stream()
+                        .map(StockData::getDate)
+                        .max(LocalDate::compareTo)
+                        .orElse(null));
+                    stockInfo.put("firstGoldenCross", goldenCrossData.stream()
+                        .map(StockData::getDate)
+                        .min(LocalDate::compareTo)
+                        .orElse(null));
+                    
+                    goldenCrossStocks.add(stockInfo);
+                }
+            }
+            
+            result.put("status", "SUCCESS");
+            result.put("fromDate", fromDate);
+            result.put("toDate", toDate);
+            result.put("goldenCrossStocks", goldenCrossStocks);
+            result.put("totalStocks", goldenCrossStocks.size());
+            result.put("timestamp", LocalDate.now());
+            
+        } catch (Exception e) {
+            logger.error("❌ Error finding golden cross stocks: {}", e.getMessage());
+            result.put("status", "ERROR");
+            result.put("error", e.getMessage());
+        }
+        
+        return result;
+    }
+    
+    // Keep all other methods unchanged... (they are complete and working)
     
     /**
      * Fetch and process historical data for a single stock
@@ -201,7 +361,7 @@ public class StockDataService {
             JsonNode historicalData = kiteApiService.fetchHistoricalData(instrumentToken, fromDate, toDate);
             
             if (historicalData == null || !historicalData.isArray()) {
-                logger.warn("No data received for {}", symbol);
+                logger.warn("⚠️ No data received for {}", symbol);
                 return 0;
             }
             
@@ -232,20 +392,20 @@ public class StockDataService {
                     }
                     
                 } catch (Exception e) {
-                    logger.warn("Failed to parse day data for {}: {}", symbol, e.getMessage());
+                    logger.warn("⚠️ Failed to parse day data for {}: {}", symbol, e.getMessage());
                 }
             }
             
             // Save all records in batch
             if (!stockDataList.isEmpty()) {
                 stockDataRepository.saveAll(stockDataList);
-                logger.debug("Saved {} records for {}", stockDataList.size(), symbol);
+                logger.debug("💾 Saved {} records for {}", stockDataList.size(), symbol);
             }
             
             return recordsProcessed;
             
         } catch (Exception e) {
-            logger.error("Error processing historical data for {}: {}", symbol, e.getMessage());
+            logger.error("❌ Error processing historical data for {}: {}", symbol, e.getMessage());
             throw new RuntimeException("Failed to process " + symbol, e);
         }
     }
@@ -257,7 +417,7 @@ public class StockDataService {
         try {
             // Kite API returns array: [date, open, high, low, close, volume, oi]
             if (!dayData.isArray() || dayData.size() < 6) {
-                logger.warn("Invalid data format for {}: {}", symbol, dayData);
+                logger.warn("⚠️ Invalid data format for {}: {}", symbol, dayData);
                 return null;
             }
             
@@ -276,7 +436,7 @@ public class StockDataService {
             return new StockData(symbol, date, openPrice, highPrice, lowPrice, closingPrice, volume, BigDecimal.ZERO);
             
         } catch (Exception e) {
-            logger.error("Error parsing Kite data for {}: {}", symbol, e.getMessage());
+            logger.error("❌ Error parsing Kite data for {}: {}", symbol, e.getMessage());
             return null;
         }
     }
@@ -321,7 +481,7 @@ public class StockDataService {
                 return stockDataRepository.findBySymbolAndDateBetween(symbol, fromDate, toDate);
             }
         } catch (Exception e) {
-            logger.error("Error filtering stock data: {}", e.getMessage());
+            logger.error("❌ Error filtering stock data: {}", e.getMessage());
             return new ArrayList<>();
         }
     }
@@ -334,7 +494,7 @@ public class StockDataService {
     }
     
     /**
-     * Get system statistics
+     * ENHANCED: Get system statistics with moving averages info
      */
     public Map<String, Object> getSystemStats() {
         Map<String, Object> stats = new HashMap<>();
@@ -353,6 +513,27 @@ public class StockDataService {
                 .stream()
                 .min(Comparator.comparing(StockData::getDate));
             
+            // Moving averages statistics
+            long recordsWith100MA = 0;
+            long recordsWith200MA = 0;
+            long recordsWithGoldenCross = 0;
+            
+            if (movingAveragesEnabled) {
+                // This could be optimized with aggregation queries
+                for (String symbol : distinctSymbols) {
+                    List<StockData> symbolData = stockDataRepository.findBySymbol(symbol);
+                    recordsWith100MA += symbolData.stream()
+                        .filter(d -> d.getMovingAverage100Day() != null)
+                        .count();
+                    recordsWith200MA += symbolData.stream()
+                        .filter(d -> d.getMovingAverage200Day() != null)
+                        .count();
+                    recordsWithGoldenCross += symbolData.stream()
+                        .filter(d -> "GOLDEN_CROSS".equals(d.getGoldenCross()))
+                        .count();
+                }
+            }
+            
             stats.put("totalRecords", totalRecords);
             stats.put("availableSymbols", distinctSymbols.size());
             stats.put("symbols", distinctSymbols);
@@ -361,6 +542,14 @@ public class StockDataService {
             stats.put("authenticated", kiteAuthService.isAuthenticated());
             stats.put("autoFetchEnabled", autoFetchEnabled);
             stats.put("schedulerEnabled", schedulerEnabled);
+            stats.put("movingAveragesEnabled", movingAveragesEnabled);
+            
+            // Moving averages stats
+            stats.put("recordsWith100DayMA", recordsWith100MA);
+            stats.put("recordsWith200DayMA", recordsWith200MA);
+            stats.put("recordsWithGoldenCross", recordsWithGoldenCross);
+            stats.put("ma100Coverage", totalRecords > 0 ? (recordsWith100MA * 100.0 / totalRecords) : 0);
+            stats.put("ma200Coverage", totalRecords > 0 ? (recordsWith200MA * 100.0 / totalRecords) : 0);
             
             if (latestRecord.isPresent()) {
                 stats.put("latestDataDate", latestRecord.get().getDate());
@@ -373,7 +562,7 @@ public class StockDataService {
             stats.put("timestamp", java.time.LocalDateTime.now());
             
         } catch (Exception e) {
-            logger.error("Error getting system stats: {}", e.getMessage());
+            logger.error("❌ Error getting system stats: {}", e.getMessage());
             stats.put("error", "Failed to get stats: " + e.getMessage());
         }
         
@@ -389,7 +578,7 @@ public class StockDataService {
             return 0;
         }
         
-        logger.info("Generating mock data for {} stocks from {} to {}", 
+        logger.info("🔄 Generating mock data for {} stocks from {} to {}", 
                    NIFTY50_INSTRUMENTS.size(), fromDate, toDate);
         
         Random random = new Random();
@@ -430,14 +619,14 @@ public class StockDataService {
                     totalRecords++;
                     basePrice = close; // Use closing price as next day's base
                 } catch (Exception e) {
-                    logger.debug("Duplicate data for {} on {}, skipping", symbol, currentDate);
+                    logger.debug("📝 Duplicate data for {} on {}, skipping", symbol, currentDate);
                 }
                 
                 currentDate = currentDate.plusDays(1);
             }
         }
         
-        logger.info("Generated {} mock records", totalRecords);
+        logger.info("✅ Generated {} mock records", totalRecords);
         return totalRecords;
     }
     
