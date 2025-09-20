@@ -22,6 +22,20 @@ public interface JobExecutionRepository extends MongoRepository<JobExecution, St
      */
     List<JobExecution> findAllByOrderByLastRunDesc();
     
+    /**
+     * Find top job by last run date
+     */
+    JobExecution findTopByOrderByLastRunDesc();
+
+    /**
+     * Find top 10 recent jobs
+     */
+    List<JobExecution> findTop10ByOrderByLastRunDesc();
+    
+    /**
+     * Find jobs by status
+     */
+    List<JobExecution> findByStatus(String status);
     
     /**
      * Find jobs that are currently running
@@ -77,35 +91,4 @@ public interface JobExecutionRepository extends MongoRepository<JobExecution, St
      */
     @Query("{'jobName': ?0}")
     List<JobExecution> findByJobNameOrderByLastRunDesc(String jobName);
-
-        /**
-     * Find top job by last run date
-     */
-    JobExecution findTopByOrderByLastRunDesc();
-
-    /**
-     * Find top 10 recent jobs
-     */
-    List<JobExecution> findTop10ByOrderByLastRunDesc();
-
-    /**
-     * Find jobs by status - KEEP ONLY ONE OF THESE
-     */
-    List<JobExecution> findByStatus(String status);
-
-    /**
-     * Find top job by started date
-     */
-    JobExecution findTopByOrderByStartedAtDesc();
-
-    /**
-     * Find top 10 recent jobs
-     */
-    List<JobExecution> findTop10ByOrderByStartedAtDesc();
-
-    /**
-     * Find all jobs ordered by date
-     */
-    List<JobExecution> findAllByOrderByStartedAtDesc();
-    
-    }
+}

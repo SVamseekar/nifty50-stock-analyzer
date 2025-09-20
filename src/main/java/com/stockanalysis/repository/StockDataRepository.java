@@ -63,29 +63,6 @@ public interface StockDataRepository extends MongoRepository<StockData, String> 
     List<StockData> findBySymbolAndDateBetweenAndPercentageChangeLessThanEqual(
         String symbol, LocalDate startDate, LocalDate endDate, BigDecimal maxPercentage);
     
-    /**
-     * Find positive changes only
-     */
-    @Query("{'symbol': ?0, 'date': {$gte: ?1, $lte: ?2}, 'percentageChange': {$gt: 0}}")
-    List<StockData> findPositiveChanges(String symbol, LocalDate startDate, LocalDate endDate);
-    
-    /**
-     * Find negative changes only
-     */
-    @Query("{'symbol': ?0, 'date': {$gte: ?1, $lte: ?2}, 'percentageChange': {$lt: 0}}")
-    List<StockData> findNegativeChanges(String symbol, LocalDate startDate, LocalDate endDate);
-    
-    // ==========================================
-    // VOLUME-BASED QUERIES
-    // ==========================================
-    
-    /**
-     * Find high volume trading days
-     */
-    @Query("{'symbol': ?0, 'date': {$gte: ?1, $lte: ?2}, 'volume': {$gte: ?3}}")
-    List<StockData> findBySymbolAndDateBetweenAndVolumeGreaterThanEqual(
-        String symbol, LocalDate startDate, LocalDate endDate, Long minVolume);
-    
     // ==========================================
     // AGGREGATION QUERIES
     // ==========================================
@@ -100,127 +77,6 @@ public interface StockDataRepository extends MongoRepository<StockData, String> 
     List<String> findDistinctSymbols();
     
     /**
-     * Get symbols with their record counts
-     */
-    @Aggregation(pipeline = {
-        "{ '$group': { '_id': '$symbol', 'count': { '$sum': 1 } } }",
-        "{ '$project': { '_id': 0, 'symbol': '$_id', 'count': 1 } }",
-        "{ '$sort': { 'count': -1 } }"
-    })
-    List<Object> getSymbolCounts();
-    
-    /**
-     * Get average percentage change by symbol
-     */
-    @Aggregation(pipeline = {
-        "{ '$match': { 'symbol': ?0, 'date': { '$gte': ?1, '$lte': ?2 } } }",
-        "{ '$group': { '_id': '$symbol', 'avgChange': { '$avg': '$percentageChange' }, 'count': { '$sum': 1 } } }"
-    })
-    List<Object> getAveragePercentageChange(String symbol, LocalDate startDate, LocalDate endDate);
-    
-    /**
-     * Find top movers (highest percentage changes) across all symbols
-     */
-    @Aggregation(pipeline = {
-        "{ '$match': { 'date': { '$gte': ?0, '$lte': ?1 } } }",
-        "{ '$sort': { 'percentageChange': -1 } }",
-        "{ '$limit': ?2 }"
-    })
-    List<StockData> findTopMovers(LocalDate startDate, LocalDate endDate, int limit);
-    
-    /**
-     * Find bottom movers (lowest percentage changes) across all symbols
-     */
-    @Aggregation(pipeline = {
-        "{ '$match': { 'date': { '$gte': ?0, '$lte': ?1 } } }",
-        "{ '$sort': { 'percentageChange': 1 } }",
-        "{ '$limit': ?2 }"
-    })
-    List<StockData> findBottomMovers(LocalDate startDate, LocalDate endDate, int limit);
-    
-    /**
-     * Get daily statistics for a date range
-     */
-    @Aggregation(pipeline = {
-        "{ '$match': { 'date': { '$gte': ?0, '$lte': ?1 } } }",
-        "{ '$group': { '_id': '$date', 'avgChange': { '$avg': '$percentageChange' }, 'maxChange': { '$max': '$percentageChange' }, 'minChange': { '$min': '$percentageChange' }, 'totalVolume': { '$sum': '$volume' }, 'count': { '$sum': 1 } } }",
-        "{ '$sort': { '_id': 1 } }"
-    })
-    List<Object> getDailyStatistics(LocalDate startDate, LocalDate endDate);
-    
-    // ==========================================
-    // COUNT QUERIES
-    // ==========================================
-    
-    /**
-     * Count records for a symbol
-     */
-    long countBySymbol(String symbol);
-    
-    /**
-     * Count records for symbol in date range
-     */
-    long countBySymbolAndDateBetween(String symbol, LocalDate startDate, LocalDate endDate);
-    
-    /**
-     * Count records with significant changes (above threshold)
-     */
-    @Query(value = "{'symbol': ?0, 'date': {$gte: ?1, $lte: ?2}, $or: [{'percentageChange': {$gte: ?3}}, {'percentageChange': {$lte: ?4}}]}", count = true)
-    long countSignificantChanges(String symbol, LocalDate startDate, LocalDate endDate, 
-                                BigDecimal positiveThreshold, BigDecimal negativeThreshold);
-    
-    // ==========================================
-    // DATE-BASED QUERIES
-    // ==========================================
-    
-    /**
-     * Find latest date for a symbol (most recent data)
-     */
-    @Query(value = "{'symbol': ?0}", sort = "{'date': -1}")
-    Optional<StockData> findLatestBySymbol(String symbol);
-    
-    /**
-     * Find earliest date for a symbol (oldest data)
-     */
-    @Query(value = "{'symbol': ?0}", sort = "{'date': 1}")
-    Optional<StockData> findEarliestBySymbol(String symbol);
-    
-    /**
-     * Find all records for a specific date across all symbols
-     */
-    List<StockData> findByDate(LocalDate date);
-    
-    /**
-     * Check if data exists for symbol and date
-     */
-    boolean existsBySymbolAndDate(String symbol, LocalDate date);
-    
-    // ==========================================
-    // CUSTOM ANALYSIS QUERIES
-    // ==========================================
-    
-    /**
-     * Find stocks that had consecutive positive/negative days
-     */
-    @Query("{'symbol': ?0, 'date': {$gte: ?1, $lte: ?2}}")
-    List<StockData> findForTrendAnalysis(String symbol, LocalDate startDate, LocalDate endDate);
-    
-    /**
-     * Delete old data (cleanup)
-     */
-    void deleteByDateBefore(LocalDate cutoffDate);
-    
-    /**
-     * Delete data for specific symbol
-     */
-    void deleteBySymbol(String symbol);
-
-        /**
-     * Count distinct dates
-     */
-    @Query("db.stock_data.distinct('date').length")
-    
-        /**
      * Count distinct dates using aggregation
      */
     @Aggregation(pipeline = {
@@ -228,7 +84,11 @@ public interface StockDataRepository extends MongoRepository<StockData, String> 
         "{ '$count': 'totalDates' }"
     })
     Long countDistinctDates();
-
+    
+    // ==========================================
+    // DATE-BASED QUERIES
+    // ==========================================
+    
     /**
      * Find by date greater than or equal
      */
@@ -258,7 +118,30 @@ public interface StockDataRepository extends MongoRepository<StockData, String> 
      * Find by date and percentage change less than
      */
     List<StockData> findByDateGreaterThanEqualAndPercentageChangeLessThanEqual(LocalDate date, BigDecimal percentage);
-
     
-
+    /**
+     * Find latest date for a symbol (most recent data)
+     */
+    @Query(value = "{'symbol': ?0}", sort = "{'date': -1}")
+    Optional<StockData> findLatestBySymbol(String symbol);
+    
+    /**
+     * Find all records for a specific date across all symbols
+     */
+    List<StockData> findByDate(LocalDate date);
+    
+    /**
+     * Check if data exists for symbol and date
+     */
+    boolean existsBySymbolAndDate(String symbol, LocalDate date);
+    
+    /**
+     * Count records for a symbol
+     */
+    long countBySymbol(String symbol);
+    
+    /**
+     * Delete data for specific symbol
+     */
+    void deleteBySymbol(String symbol);
 }

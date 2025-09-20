@@ -119,30 +119,30 @@ public class StockDataService {
     @Scheduled(cron = "0 0 19 * * MON-FRI", zone = "Asia/Kolkata")
     public void scheduledDataFetch() {
         if (!schedulerEnabled) {
-            logger.info("📅 Scheduler disabled, skipping scheduled data fetch");
+            logger.info("Scheduler disabled, skipping scheduled data fetch");
             return;
         }
         
-        logger.info("🚀 Starting scheduled daily data fetch at {}", LocalDate.now());
+        logger.info("Starting scheduled daily data fetch at {}", LocalDate.now());
         
         try {
             Optional<LocalDate> lastRunDate = jobExecutionService.getLastSuccessfulRunDate("DAILY_STOCK_FETCH");
             LocalDate fromDate = lastRunDate.orElse(LocalDate.now().minusDays(5));
             LocalDate toDate = LocalDate.now();
             
-            logger.info("📊 Fetching data from {} to {}", fromDate, toDate);
+            logger.info("Fetching data from {} to {}", fromDate, toDate);
             
             int recordsProcessed = fetchAllHistoricalData(fromDate, toDate);
             
             if (movingAveragesEnabled && recordsProcessed > 0) {
-                logger.info("🧮 Calculating moving averages for recent data...");
+                logger.info("Calculating moving averages for recent data...");
                 movingAverageService.calculateMovingAveragesForRecentData(fromDate);
             }
             
-            logger.info("✅ Scheduled job completed: {} records processed", recordsProcessed);
+            logger.info("Scheduled job completed: {} records processed", recordsProcessed);
             
         } catch (Exception e) {
-            logger.error("❌ Scheduled job failed: {}", e.getMessage(), e);
+            logger.error("Scheduled job failed: {}", e.getMessage(), e);
             jobExecutionService.recordJobError("DAILY_STOCK_FETCH", e);
         }
     }
@@ -160,26 +160,26 @@ public class StockDataService {
         List<String> failedSymbols = new ArrayList<>();
         
         try {
-            logger.info("🚀 Starting Nifty 50 data fetch for {} stocks from {} to {}", 
+            logger.info("Starting Nifty 50 data fetch for {} stocks from {} to {}", 
                        NIFTY50_INSTRUMENTS.size(), fromDate, toDate);
             
             // FIXED: Better authentication check
             if (!useRealData) {
-                logger.warn("⚠️ Real data disabled in configuration. Using mock data.");
+                logger.warn("Real data disabled in configuration. Using mock data.");
                 totalRecordsProcessed = generateMockData(fromDate, toDate);
             } else if (!kiteAuthService.isAuthenticated()) {
-                logger.error("❌ Kite API not authenticated. Please authenticate first.");
-                logger.info("🔗 Visit: http://localhost:8081/stock-analyzer/api/auth/kite/login");
+                logger.error("Kite API not authenticated. Please authenticate first.");
+                logger.info("Visit: http://localhost:8081/stock-analyzer/api/auth/kite/login");
                 totalRecordsProcessed = generateMockData(fromDate, toDate);
             } else {
                 // Test connection first
                 boolean connectionOk = kiteApiService.testConnection();
                 if (!connectionOk) {
-                    logger.error("❌ Kite API connection test failed. Check authentication.");
+                    logger.error("Kite API connection test failed. Check authentication.");
                     throw new RuntimeException("Kite API connection failed");
                 }
                 
-                logger.info("✅ Kite API authenticated and connected. Fetching real data...");
+                logger.info("Kite API authenticated and connected. Fetching real data...");
                 
                 // Fetch real data from Kite API
                 for (Map.Entry<String, String> entry : NIFTY50_INSTRUMENTS.entrySet()) {
@@ -187,16 +187,16 @@ public class StockDataService {
                     String instrumentToken = entry.getValue();
                     
                     try {
-                        logger.debug("📊 Processing {}: {}", symbol, instrumentToken);
+                        logger.debug("Processing {}: {}", symbol, instrumentToken);
                         
                         int recordsForSymbol = fetchAndProcessHistoricalData(symbol, instrumentToken, fromDate, toDate);
                         
                         if (recordsForSymbol > 0) {
                             totalRecordsProcessed += recordsForSymbol;
                             successfulStocks++;
-                            logger.debug("✅ {} - {} records processed", symbol, recordsForSymbol);
+                            logger.debug("{} - {} records processed", symbol, recordsForSymbol);
                         } else {
-                            logger.warn("⚠️ {} - No records processed", symbol);
+                            logger.warn("{} - No records processed", symbol);
                             failedStocks++;
                             failedSymbols.add(symbol);
                         }
@@ -205,7 +205,7 @@ public class StockDataService {
                         kiteApiService.rateLimit();
                         
                     } catch (Exception e) {
-                        logger.error("❌ Failed to process {}: {}", symbol, e.getMessage());
+                        logger.error("Failed to process {}: {}", symbol, e.getMessage());
                         failedStocks++;
                         failedSymbols.add(symbol);
                     }
@@ -214,12 +214,12 @@ public class StockDataService {
             
             // Calculate moving averages if enabled
             if (movingAveragesEnabled && totalRecordsProcessed > 0) {
-                logger.info("🧮 Calculating moving averages for all updated stocks...");
+                logger.info("Calculating moving averages for all updated stocks...");
                 try {
                     movingAverageService.calculateMovingAveragesForAllStocks();
-                    logger.info("✅ Moving averages calculation completed");
+                    logger.info("Moving averages calculation completed");
                 } catch (Exception e) {
-                    logger.error("❌ Moving averages calculation failed: {}", e.getMessage());
+                    logger.error("Moving averages calculation failed: {}", e.getMessage());
                 }
             }
             
@@ -231,12 +231,12 @@ public class StockDataService {
             );
             
             jobExecutionService.recordJobCompletion(jobName, "SUCCESS", message);
-            logger.info("🎉 Data fetch completed: {}", message);
+            logger.info("Data fetch completed: {}", message);
             
             return totalRecordsProcessed;
             
         } catch (Exception e) {
-            logger.error("💥 Fatal error in data fetch job: {}", e.getMessage(), e);
+            logger.error("Fatal error in data fetch job: {}", e.getMessage(), e);
             jobExecutionService.recordJobError(jobName, e);
             throw new RuntimeException("Data fetch job failed", e);
         }
@@ -248,11 +248,11 @@ public class StockDataService {
     private int fetchAndProcessHistoricalData(String symbol, String instrumentToken, 
                                             LocalDate fromDate, LocalDate toDate) {
         try {
-            logger.debug("🔍 Fetching data for {}: {}", symbol, instrumentToken);
+            logger.debug("Fetching data for {}: {}", symbol, instrumentToken);
             
             // FIXED: Better validation
             if (!kiteApiService.isValidInstrumentToken(instrumentToken)) {
-                logger.error("❌ Invalid instrument token for {}: {}", symbol, instrumentToken);
+                logger.error("Invalid instrument token for {}: {}", symbol, instrumentToken);
                 return 0;
             }
             
@@ -260,16 +260,16 @@ public class StockDataService {
             JsonNode historicalData = kiteApiService.fetchHistoricalData(instrumentToken, fromDate, toDate);
             
             if (historicalData == null) {
-                logger.warn("⚠️ No data received from Kite API for {}", symbol);
+                logger.warn("No data received from Kite API for {}", symbol);
                 return 0;
             }
             
             if (!historicalData.isArray() || historicalData.size() == 0) {
-                logger.warn("⚠️ Empty or invalid data array for {}", symbol);
+                logger.warn("Empty or invalid data array for {}", symbol);
                 return 0;
             }
             
-            logger.debug("📊 Processing {} days of data for {}", historicalData.size(), symbol);
+            logger.debug("Processing {} days of data for {}", historicalData.size(), symbol);
             
             int recordsProcessed = 0;
             List<StockData> stockDataList = new ArrayList<>();
@@ -298,7 +298,7 @@ public class StockDataService {
                     }
                     
                 } catch (Exception e) {
-                    logger.warn("⚠️ Failed to parse day data for {}: {}", symbol, e.getMessage());
+                    logger.warn("Failed to parse day data for {}: {}", symbol, e.getMessage());
                 }
             }
             
@@ -326,9 +326,9 @@ public class StockDataService {
                             stockDataRepository.save(stockData);
                         }
                     }
-                    logger.debug("💾 Saved/Updated {} records for {}", stockDataList.size(), symbol);
+                    logger.debug("Saved/Updated {} records for {}", stockDataList.size(), symbol);
                 } catch (Exception e) {
-                    logger.error("❌ Database error saving data for {}: {}", symbol, e.getMessage());
+                    logger.error("Database error saving data for {}: {}", symbol, e.getMessage());
                     throw e;
                 }
             }
@@ -336,7 +336,7 @@ public class StockDataService {
             return recordsProcessed;
             
         } catch (Exception e) {
-            logger.error("❌ Error processing historical data for {}: {}", symbol, e.getMessage());
+            logger.error("Error processing historical data for {}: {}", symbol, e.getMessage());
             throw new RuntimeException("Failed to process " + symbol, e);
         }
     }
@@ -348,14 +348,14 @@ public class StockDataService {
         try {
             // FIXED: Kite API returns array: [timestamp, open, high, low, close, volume]
             if (!dayData.isArray()) {
-                logger.warn("⚠️ Expected array format for {}, got: {}", symbol, dayData.getNodeType());
+                logger.warn("Expected array format for {}, got: {}", symbol, dayData.getNodeType());
                 return null;
             }
             
             if (dayData.size() < 6) {
-                logger.warn("⚠️ Invalid data array size for {}: expected 6 elements, got {}", 
+                logger.warn("Invalid data array size for {}: expected 6 elements, got {}", 
                            symbol, dayData.size());
-                logger.debug("🔍 Data content: {}", dayData);
+                logger.debug("Data content: {}", dayData);
                 return null;
             }
             
@@ -371,11 +371,11 @@ public class StockDataService {
                     // Format: "2024-08-21"
                     date = LocalDate.parse(timestamp.substring(0, 10));
                 } else {
-                    logger.warn("⚠️ Unrecognized timestamp format for {}: {}", symbol, timestamp);
+                    logger.warn("Unrecognized timestamp format for {}: {}", symbol, timestamp);
                     return null;
                 }
             } catch (Exception e) {
-                logger.error("❌ Failed to parse date for {}: {} - {}", symbol, timestamp, e.getMessage());
+                logger.error("Failed to parse date for {}: {} - {}", symbol, timestamp, e.getMessage());
                 return null;
             }
             
@@ -391,7 +391,7 @@ public class StockDataService {
                 closingPrice = parsePrice(dayData.get(4), "close", symbol);
                 
                 if (openPrice == null || highPrice == null || lowPrice == null || closingPrice == null) {
-                    logger.warn("⚠️ Invalid price data for {} on {}", symbol, date);
+                    logger.warn("Invalid price data for {} on {}", symbol, date);
                     return null;
                 }
                 
@@ -404,25 +404,25 @@ public class StockDataService {
                 }
                 
             } catch (Exception e) {
-                logger.error("❌ Failed to parse OHLCV data for {} on {}: {}", symbol, date, e.getMessage());
+                logger.error("Failed to parse OHLCV data for {} on {}: {}", symbol, date, e.getMessage());
                 return null;
             }
             
             // FIXED: Validate data consistency
             if (!isValidOHLCData(openPrice, highPrice, lowPrice, closingPrice)) {
-                logger.warn("⚠️ Invalid OHLC relationships for {} on {}: O={}, H={}, L={}, C={}", 
+                logger.warn("Invalid OHLC relationships for {} on {}: O={}, H={}, L={}, C={}", 
                            symbol, date, openPrice, highPrice, lowPrice, closingPrice);
                 return null;
             }
             
-            logger.debug("✅ Parsed data for {} on {}: O={}, H={}, L={}, C={}, V={}", 
+            logger.debug("Parsed data for {} on {}: O={}, H={}, L={}, C={}, V={}", 
                         symbol, date, openPrice, highPrice, lowPrice, closingPrice, volume);
             
             // Create and return StockData object
             return new StockData(symbol, date, openPrice, highPrice, lowPrice, closingPrice, volume, BigDecimal.ZERO);
             
         } catch (Exception e) {
-            logger.error("❌ Unexpected error parsing Kite data for {}: {}", symbol, e.getMessage());
+            logger.error("Unexpected error parsing Kite data for {}: {}", symbol, e.getMessage());
             return null;
         }
     }
@@ -433,7 +433,7 @@ public class StockDataService {
     private BigDecimal parsePrice(JsonNode priceNode, String priceType, String symbol) {
         try {
             if (priceNode.isNull()) {
-                logger.warn("⚠️ Null {} price for {}", priceType, symbol);
+                logger.warn("Null {} price for {}", priceType, symbol);
                 return null;
             }
             
@@ -441,7 +441,7 @@ public class StockDataService {
             if (priceNode.isTextual()) {
                 String priceText = priceNode.asText().trim();
                 if (priceText.isEmpty()) {
-                    logger.warn("⚠️ Empty {} price for {}", priceType, symbol);
+                    logger.warn("Empty {} price for {}", priceType, symbol);
                     return null;
                 }
                 price = new BigDecimal(priceText);
@@ -451,14 +451,14 @@ public class StockDataService {
             
             // Validate price is positive
             if (price.compareTo(BigDecimal.ZERO) <= 0) {
-                logger.warn("⚠️ Invalid {} price for {}: {}", priceType, symbol, price);
+                logger.warn("Invalid {} price for {}: {}", priceType, symbol, price);
                 return null;
             }
             
             return price.setScale(2, RoundingMode.HALF_UP);
             
         } catch (NumberFormatException e) {
-            logger.error("❌ Failed to parse {} price for {}: {}", priceType, symbol, priceNode.asText());
+            logger.error("Failed to parse {} price for {}: {}", priceType, symbol, priceNode.asText());
             return null;
         }
     }
@@ -500,7 +500,7 @@ public class StockDataService {
             
             return percentage;
         } catch (ArithmeticException e) {
-            logger.warn("⚠️ Failed to calculate percentage change: prev={}, curr={}", previousPrice, currentPrice);
+            logger.warn("Failed to calculate percentage change: prev={}, curr={}", previousPrice, currentPrice);
             return BigDecimal.ZERO;
         }
     }
@@ -512,7 +512,7 @@ public class StockDataService {
         Map<String, Object> result = new HashMap<>();
         
         try {
-            logger.info("🚀 Manual trigger: Calculating moving averages for all stocks");
+            logger.info("Manual trigger: Calculating moving averages for all stocks");
             
             if (!movingAveragesEnabled) {
                 result.put("status", "DISABLED");
@@ -531,10 +531,10 @@ public class StockDataService {
             result.put("durationMs", duration);
             result.put("timestamp", LocalDate.now());
             
-            logger.info("✅ Moving averages calculation completed in {}ms", duration);
+            logger.info("Moving averages calculation completed in {}ms", duration);
             
         } catch (Exception e) {
-            logger.error("❌ Moving averages calculation failed: {}", e.getMessage(), e);
+            logger.error("Moving averages calculation failed: {}", e.getMessage(), e);
             result.put("status", "FAILED");
             result.put("error", e.getMessage());
         }
@@ -576,7 +576,7 @@ public class StockDataService {
                 .collect(Collectors.toList());
                 
         } catch (Exception e) {
-            logger.error("❌ Error filtering stock data with MA filters: {}", e.getMessage());
+            logger.error("Error filtering stock data with MA filters: {}", e.getMessage());
             return new ArrayList<>();
         }
     }
@@ -620,7 +620,7 @@ public class StockDataService {
             result.put("timestamp", LocalDate.now());
             
         } catch (Exception e) {
-            logger.error("❌ Error finding golden cross stocks: {}", e.getMessage());
+            logger.error("Error finding golden cross stocks: {}", e.getMessage());
             result.put("status", "ERROR");
             result.put("error", e.getMessage());
         }
@@ -652,7 +652,7 @@ public class StockDataService {
                 return stockDataRepository.findBySymbolAndDateBetween(symbol, fromDate, toDate);
             }
         } catch (Exception e) {
-            logger.error("❌ Error filtering stock data: {}", e.getMessage());
+            logger.error("Error filtering stock data: {}", e.getMessage());
             return new ArrayList<>();
         }
     }
@@ -738,7 +738,7 @@ public class StockDataService {
             stats.put("timestamp", java.time.LocalDateTime.now());
             
         } catch (Exception e) {
-            logger.error("❌ Error getting system stats: {}", e.getMessage());
+            logger.error("Error getting system stats: {}", e.getMessage());
             stats.put("error", "Failed to get stats: " + e.getMessage());
         }
         
@@ -750,11 +750,11 @@ public class StockDataService {
      */
     private int generateMockData(LocalDate fromDate, LocalDate toDate) {
         if (!mockDataEnabled) {
-            logger.info("🔄 Mock data disabled, skipping data generation");
+            logger.info("Mock data disabled, skipping data generation");
             return 0;
         }
         
-        logger.info("🔄 Generating mock data for {} stocks from {} to {}", 
+        logger.info("Generating mock data for {} stocks from {} to {}", 
                    NIFTY50_INSTRUMENTS.size(), fromDate, toDate);
         
         Random random = new Random();
@@ -797,14 +797,14 @@ public class StockDataService {
                     }
                     basePrice = close;
                 } catch (Exception e) {
-                    logger.debug("📝 Error saving mock data for {} on {}: {}", symbol, currentDate, e.getMessage());
+                    logger.debug("Error saving mock data for {} on {}: {}", symbol, currentDate, e.getMessage());
                 }
                 
                 currentDate = currentDate.plusDays(1);
             }
         }
         
-        logger.info("✅ Generated {} mock records", totalRecords);
+        logger.info("Generated {} mock records", totalRecords);
         return totalRecords;
     }
     

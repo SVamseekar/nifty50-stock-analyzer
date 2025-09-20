@@ -6,7 +6,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.context.annotation.Bean;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
-import org.springframework.lang.NonNull;  // FIXED: Added missing import
+import org.springframework.lang.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -19,13 +19,19 @@ public class StockAnalyzerApplication {
     
     private static final Logger logger = LoggerFactory.getLogger(StockAnalyzerApplication.class);
     
+    // CLEAN MAIN METHOD - NO DEVTOOLS IMPORT
     public static void main(String[] args) {
         try {
             logger.info("Starting Nifty 50 Stock Analyzer Application...");
             SpringApplication.run(StockAnalyzerApplication.class, args);
             logger.info("Nifty 50 Stock Analyzer Application started successfully!");
         } catch (Exception e) {
-            logger.error("Failed to start Nifty 50 Stock Analyzer Application: {}", e.getMessage());
+            // Check if it's a DevTools restart exception by class name (no import needed)
+            if (e.getClass().getName().contains("SilentExitException")) {
+                logger.debug("DevTools restart triggered - this is normal");
+                return; // Don't exit for DevTools restarts
+            }
+            logger.error("Failed to start Nifty 50 Stock Analyzer Application: {}", e.getMessage(), e);
             System.exit(1);
         }
     }
@@ -48,14 +54,11 @@ public class StockAnalyzerApplication {
         logger.info("===============================================");
     }
     
-    /**
-     * CORS configuration to handle cross-origin requests
-     */
     @Bean
     public WebMvcConfigurer corsConfigurer() {
         return new WebMvcConfigurer() {
             @Override
-            public void addCorsMappings(@NonNull CorsRegistry registry) {  // FIXED: Added @NonNull annotation
+            public void addCorsMappings(@NonNull CorsRegistry registry) {
                 registry.addMapping("/api/**")
                         .allowedOrigins("*")
                         .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")

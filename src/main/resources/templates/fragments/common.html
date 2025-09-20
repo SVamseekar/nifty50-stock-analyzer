@@ -2,7 +2,7 @@
 <html xmlns:th="http://www.thymeleaf.org">
 
 <div th:fragment="common (pageTitle)">
-    <div class="header" onclick="window.location.href='/dashboard'">
+    <div class="header" th:onclick="|window.location.href='@{/dashboard}'|">
         <h1>🔹 Nifty 50 Stock Analyzer</h1>
         <div class="nifty-value">
             <p>Analysis Period: 2020-2025 | Status: <span th:text="${analysisStatus ?: 'Ready'}">Ready</span> | 
@@ -11,14 +11,13 @@
     </div>
     <div class="home-menu-buttons">
         <div style="display:flex; flex-wrap: wrap;">
-            <a href="/dashboard"><button type="button"><i class="fas fa-tachometer-alt"></i> Dashboard</button></a>
-            <a href="/stock-analysis"><button type="button"><i class="fas fa-chart-line"></i> Stock Analysis</button></a>
-            <a href="/percentage-changes"><button type="button"><i class="fas fa-percentage"></i> % Changes</button></a>
-            <a href="/moving-averages"><button type="button"><i class="fas fa-wave-square"></i> Moving Averages</button></a>
-            <a href="/job-status"><button type="button"><i class="fas fa-tasks"></i> Job Status</button></a>
-            <a href="/top-performers"><button type="button"><i class="fas fa-trophy"></i> Top Performers</button></a>
-            <a href="/volatility-analysis"><button type="button"><i class="fas fa-chart-area"></i> Volatility</button></a>
-            <a href="/api/trigger-job" onclick="return confirm('Start data fetch job?')"><button type="button"><i class="fas fa-play"></i> Trigger Job</button></a>
+            <a th:href="@{/dashboard}"><button type="button"><i class="fas fa-tachometer-alt"></i> Dashboard</button></a>
+            <a th:href="@{/stock-analysis}"><button type="button"><i class="fas fa-chart-line"></i> Stock Analysis</button></a>
+            <a th:href="@{/percentage-changes}"><button type="button"><i class="fas fa-percentage"></i> % Changes</button></a>
+            <a th:href="@{/moving-averages}"><button type="button"><i class="fas fa-wave-square"></i> Moving Averages</button></a>
+            <a th:href="@{/job-status}"><button type="button"><i class="fas fa-tasks"></i> Job Status</button></a>
+            <a th:href="@{/top-performers}"><button type="button"><i class="fas fa-trophy"></i> Top Performers</button></a>
+            <a th:href="@{/volatility-analysis}"><button type="button"><i class="fas fa-chart-area"></i> Volatility</button></a>
         </div>
     </div>
     <div class="page-title">
@@ -33,7 +32,7 @@
     <div class="footer">
         <span>© 2025 Nifty 50 Stock Analyzer | Powered by Zerodha Kite API | 
               <a href="https://github.com/your-repo" style="color: #2c5777;">GitHub</a> | 
-              <a href="/api-docs" style="color: #2c5777;">API Docs</a>
+              <a th:href="@{/api-docs}" style="color: #2c5777;">API Docs</a>
         </span>
     </div>
 </div>

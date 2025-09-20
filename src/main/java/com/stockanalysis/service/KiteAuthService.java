@@ -63,8 +63,8 @@ public class KiteAuthService {
             throw new IllegalStateException("Kite API key not configured. Please set KITE_API_KEY environment variable.");
         }
         
-        String redirectUri = String.format("http://localhost:%s%s/api/auth/kite/callback", serverPort, contextPath);
-        String loginUrl = String.format("https://kite.trade/connect/login?api_key=%s&redirect_url=%s", apiKey, redirectUri);
+        String redirectUri = String.format("http://localhost:%s/api/auth/kite/callback", serverPort);
+         String loginUrl = String.format("https://kite.trade/connect/login?api_key=%s&redirect_url=%s", apiKey, redirectUri);
         
         logger.info("Generated Kite login URL with redirect: {}", redirectUri);
         logger.debug("Using API Key: {}", apiKey.substring(0, 4) + "****");
