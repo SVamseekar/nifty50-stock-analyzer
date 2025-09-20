@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <title>Nifty 50 Stock Analysis Dashboard</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; background-color: #f8f9fa; }
+        .header { background: #81C6E8; padding: 15px; border-bottom: 2px solid #5DA7DB; }
+        .header h1 { margin: 0; color: #2c5777; }
+        .nifty-info { margin-top: 8px; font-size: 14px; color: #2c5777; }
+        .content { margin: 20px; }
+        .filter-form { background: #ffffff; padding: 25px; margin: 20px 0; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 15px; }
+        label { font-weight: bold; color: #2c5777; margin-bottom: 5px; display: block; }
+        input, select { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; }
+        input:focus, select:focus { border-color: #007bff; outline: none; box-shadow: 0 0 0 2px rgba(0,123,255,0.25); }
+        .btn { padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; text-decoration: none; display: inline-block; }
+        .btn-primary { background: #007bff; color: white; }
+        .btn-secondary { background: #6c757d; color: white; }
+        .btn-success { background: #28a745; color: white; }
+        .btn-info { background: #17a2b8; color: white; }
+        .btn:hover { opacity: 0.9; transform: translateY(-1px); }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #dee2e6; }
+        th { background: #81C6E8; color: #2c5777; font-weight: bold; }
+        tbody tr:hover { background-color: #f8f9fa; }
+        .positive { color: #28a745; font-weight: bold; }
+        .negative { color: #dc3545; font-weight: bold; }
+        #nifty-price { font-weight: bold; font-size: 16px; }
+        #current-time { font-weight: bold; }
+        .signal-buy { background-color: #d4edda; color: #155724; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 12px; }
+        .signal-sell { background-color: #f8d7da; color: #721c24; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 12px; }
+        .signal-hold { background-color: #fff3cd; color: #856404; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 12px; }
+        .golden-cross { background-color: #d1ecf1; color: #0c5460; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 12px; }
+        .death-cross { background-color: #f8d7da; color: #721c24; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 12px; }
+        .neutral-cross { background-color: #e2e3e5; color: #383d41; padding: 4px 8px; border-radius: 4px; font-size: 12px; }
+        .summary-section { margin-top: 30px; background: #ffffff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; margin-top: 15px; }
+        .summary-item { background: #f8f9fa; padding: 15px; border-radius: 6px; text-align: center; }
+        .summary-value { font-size: 24px; font-weight: bold; color: #007bff; display: block; margin-bottom: 5px; }
+        .data-management { margin-top: 20px; padding-top: 20px; border-top: 2px solid #dee2e6; }
+        .button-group { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+        .status-connected { color: #28a745; font-weight: bold; }
+        .status-disconnected { color: #dc3545; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<!-- Header with Live Nifty Price -->
+<div class="header">
+    <h1>📈 Nifty 50 Stock Analysis Dashboard</h1>
+    <div class="nifty-info">
+        <strong>Nifty 50:</strong> <span id="nifty-price">Loading...</span> | 
+        <strong>Time:</strong> <span id="current-time">Loading...</span> |
+        <strong>Status:</strong> 
+        <span th:if="${kiteAuthenticated}" class="status-connected">Connected</span>
+        <span th:unless="${kiteAuthenticated}" class="status-disconnected">Disconnected</span>
+    </div>
+</div>
+
+<div class="content">
+
+    <!-- Filter Form -->
+    <div class="filter-form">
+        <h3>Stock Analysis Filters</h3>
+        <form action="/dashboard" method="get">
+            
+            <div class="form-row">
+                <div>
+                    <label for="symbol">Stock Symbol:</label>
+                    <select name="symbol" id="symbol">
+                        <option value="">All Stocks</option>
+                        <option th:each="stock : ${nifty50Stocks}" 
+                                th:value="${stock}" 
+                                th:selected="${stock == selectedSymbol}"
+                                th:text="${stock}">RELIANCE</option>
+                    </select>
+                </div>
+                
+                <div>
+                    <label for="fromDate">From Date:</label>
+                    <input type="date" name="fromDate" id="fromDate" th:value="${fromDate}"/>
+                </div>
+                
+                <div>
+                    <label for="toDate">To Date:</label>
+                    <input type="date" name="toDate" id="toDate" th:value="${toDate}"/>
+                </div>
+                
+                <div>
+                    <label for="minPercentage">Min % Change:</label>
+                    <input type="number" step="0.01" name="minPercentage" id="minPercentage" 
+                           th:value="${minPercentage}" placeholder="e.g., -5.0"/>
+                </div>
+            </div>
+            
+            <div class="form-row">
+                <div>
+                    <label for="maxPercentage">Max % Change:</label>
+                    <input type="number" step="0.01" name="maxPercentage" id="maxPercentage" 
+                           th:value="${maxPercentage}" placeholder="e.g., 5.0"/>
+                </div>
+                
+                <div>
+                    <label for="sortBy">Sort By:</label>
+                    <select name="sortBy" id="sortBy">
+                        <option value="date" th:selected="${sortBy == 'date'}">Date (Latest First)</option>
+                        <option value="percentageChange" th:selected="${sortBy == 'percentageChange'}">% Change (Highest First)</option>
+                        <option value="volume" th:selected="${sortBy == 'volume'}">Volume (Highest First)</option>
+                        <option value="symbol" th:selected="${sortBy == 'symbol'}">Symbol (A-Z)</option>
+                    </select>
+                </div>
+                
+                <div>
+                    <label for="limit">Max Results:</label>
+                    <select name="limit" id="limit">
+                        <option value="100" th:selected="${limit == 100}">100</option>
+                        <option value="500" th:selected="${limit == 500}">500</option>
+                        <option value="1000" th:selected="${limit == 1000}">1000</option>
+                    </select>
+                </div>
+                
+                <div style="display: flex; align-items: end; gap: 10px;">
+                    <button type="submit" class="btn btn-primary">Apply Filters</button>
+                    <a href="/dashboard" class="btn btn-secondary">Reset</a>
+                </div>
+            </div>
+            
+        </form>
+        
+        <!-- Data Management Section -->
+        <div class="data-management">
+            <h4>Data Management:</h4>
+            <div class="button-group">
+                <a href="/api/stocks/trigger-job" onclick="return confirm('Fetch latest stock data? This may take a few minutes.')" class="btn btn-success">
+                    Fetch Latest Data
+                </a>
+                <a href="/api/stocks/trigger-moving-averages" onclick="return confirm('Calculate moving averages? This may take a moment.')" class="btn btn-info">
+                    Calculate Moving Averages
+                </a>
+                <span style="margin-left: 20px; color: #6c757d; font-weight: bold;">
+                    Showing <span th:text="${stockData != null ? #lists.size(stockData) : 0}">0</span> results
+                </span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Results Table -->
+    <div>
+        <h3>Analysis Results</h3>
+        
+        <div style="overflow-x: auto;">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Symbol</th>
+                        <th>Date</th>
+                        <th>Close Price</th>
+                        <th>% Change</th>
+                        <th>Volume</th>
+                        <th>MA 100</th>
+                        <th>MA 200</th>
+                        <th>MA Signal</th>
+                        <th>Golden Cross</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr th:each="data : ${stockData}" th:if="${stockData != null}">
+                        <td><strong th:text="${data.symbol}">RELIANCE</strong></td>
+                        <td th:text="${#temporals.format(data.date, 'dd-MM-yyyy')}">01-01-2025</td>
+                        <td th:text="${data.closingPrice != null ? #numbers.formatDecimal(data.closingPrice, 1, 2) : 'N/A'}">2530.00</td>
+                        <td th:class="${data.percentageChange != null && data.percentageChange.doubleValue() > 0 ? 'positive' : 'negative'}"
+                            th:text="${data.percentageChange != null ? ((data.percentageChange.doubleValue() >= 0 ? '+' : '') + #numbers.formatDecimal(data.percentageChange, 1, 2) + '%') : 'N/A'}">+2.45%</td>
+                        <td th:text="${data.volume != null ? #numbers.formatInteger(data.volume, 0, 'COMMA') : 'N/A'}">1,234,567</td>
+                        <td th:text="${data.movingAverage100Day != null ? #numbers.formatDecimal(data.movingAverage100Day, 1, 2) : 'N/A'}">2480.50</td>
+                        <td th:text="${data.movingAverage200Day != null ? #numbers.formatDecimal(data.movingAverage200Day, 1, 2) : 'N/A'}">2450.75</td>
+                        <td>
+                            <span th:if="${data.maSignal100 != null}" 
+                                  th:class="'signal-' + ${data.maSignal100.toLowerCase()}" 
+                                  th:text="${data.maSignal100}">BUY</span>
+                            <span th:if="${data.maSignal100 == null}">N/A</span>
+                        </td>
+                        <td>
+                            <span th:if="${data.goldenCross != null}" 
+                                  th:class="${data.goldenCross == 'GOLDEN_CROSS' ? 'golden-cross' : (data.goldenCross == 'DEATH_CROSS' ? 'death-cross' : 'neutral-cross')}" 
+                                  th:text="${data.goldenCross}">GOLDEN_CROSS</span>
+                            <span th:if="${data.goldenCross == null}">N/A</span>
+                        </td>
+                    </tr>
+                    
+                    <!-- No Data Row -->
+                    <tr th:if="${stockData == null or #lists.isEmpty(stockData)}">
+                        <td colspan="9" style="text-align: center; color: #6c757d; font-style: italic; padding: 40px;">
+                            <div style="font-size: 18px; margin-bottom: 10px;">No data found</div>
+                            <span th:if="${!kiteAuthenticated}">
+                                Please authenticate with Kite Connect to fetch real stock data.<br>
+                                <a href="/api/auth/kite/login" style="color: #007bff; font-weight: bold;">Click here to authenticate</a>
+                            </span>
+                            <span th:if="${kiteAuthenticated}">
+                                Try different filter criteria or fetch new data using the "Fetch Latest Data" button above.
+                            </span>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Enhanced Summary Statistics -->
+    <div class="summary-section" th:if="${stockData != null and !#lists.isEmpty(stockData)}">
+        <h3>Summary Statistics & Technical Analysis</h3>
+        <div class="summary-grid">
+            <div class="summary-item">
+                <span class="summary-value" th:text="${#lists.size(stockData)}">0</span>
+                <div>Total Records</div>
+            </div>
+            <div class="summary-item">
+                <span class="summary-value positive" th:text="${positiveChanges ?: '0'}">0</span>
+                <div>Positive Changes</div>
+            </div>
+            <div class="summary-item">
+                <span class="summary-value negative" th:text="${negativeChanges ?: '0'}">0</span>
+                <div>Negative Changes</div>
+            </div>
+            <div class="summary-item">
+                <span class="summary-value" th:text="${uniqueStocks ?: '0'}">0</span>
+                <div>Unique Stocks</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Scripts -->
+<script>
+// Update live Nifty price
+function updateNiftyPrice() {
+    fetch('/api/stocks/nifty50-price')
+        .then(response => response.json())
+        .then(data => {
+            const priceElement = document.getElementById('nifty-price');
+            if (priceElement) {
+                let color = '#007bff'; // default blue
+                if (data.status === 'LIVE' || data.status === 'SAMPLE' || data.status === 'FALLBACK') {
+                    const changeValue = parseFloat(data.change);
+                    color = changeValue > 0 ? '#28a745' : changeValue < 0 ? '#dc3545' : '#007bff';
+                }
+                
+                priceElement.innerHTML = 
+                    data.price + ' <span style="color: ' + color + '">' +
+                    data.change + ' (' + data.changePercent + ')</span>';
+            }
+        })
+        .catch(error => {
+            document.getElementById('nifty-price').innerHTML = 'Price unavailable';
+        });
+}
+
+// Update clock
+function updateClock() {
+    const now = new Date();
+    const timeString = now.toLocaleString('en-IN', {
+        timeZone: 'Asia/Kolkata',
+        hour12: true,
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+    });
+    document.getElementById('current-time').textContent = timeString;
+}
+
+// Initialize
+updateClock();
+updateNiftyPrice();
+setInterval(updateClock, 1000);
+setInterval(updateNiftyPrice, 30000);
+
+// Auto-set default dates
+document.addEventListener('DOMContentLoaded', function() {
+    const fromDateInput = document.getElementById('fromDate');
+    const toDateInput = document.getElementById('toDate');
+    
+    if (!fromDateInput.value) {
+        const sixMonthsAgo = new Date();
+        sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+        fromDateInput.value = sixMonthsAgo.toISOString().split('T')[0];
+    }
+    
+    if (!toDateInput.value) {
+        const today = new Date();
+        toDateInput.value = today.toISOString().split('T')[0];
+    }
+});
+</script>
+
+</body>
+</html>

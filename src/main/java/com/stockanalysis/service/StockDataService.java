@@ -974,5 +974,33 @@ public class StockDataService {
             return numberOfStocks > 0 ? Math.max(1, totalRecords / numberOfStocks) : 0L;
         }
     }
+    /**
+ * Get recent data for all stocks (for dashboard)
+ */
+    public List<StockData> getRecentDataForAllStocks(LocalDate fromDate, LocalDate toDate, Integer limit) {
+        try {
+            List<StockData> recentData = stockDataRepository.findByDateBetween(fromDate, toDate);
+            
+            // Sort by date descending (newest first)
+            recentData.sort((a, b) -> b.getDate().compareTo(a.getDate()));
+            
+            // Apply limit if specified
+            if (limit != null && limit > 0 && recentData.size() > limit) {
+                recentData = recentData.subList(0, limit);
+            }
+            
+            return recentData;
+            
+        } catch (Exception e) {
+            logger.error("Error getting recent data for all stocks: {}", e.getMessage());
+            return new ArrayList<>();
+        }
+    }
 
+    /**
+    * Check if Kite is authenticated (for dashboard status)
+    */
+    public boolean isKiteAuthenticated() {
+        return kiteAuthService.isAuthenticated();
+    }
 }
