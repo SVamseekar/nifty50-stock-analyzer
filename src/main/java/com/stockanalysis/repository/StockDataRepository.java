@@ -1,9 +1,9 @@
 package com.stockanalysis.repository;
 
 import com.stockanalysis.model.StockData;
+import org.springframework.data.mongodb.repository.Aggregation;
 import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.data.mongodb.repository.Query;
-import org.springframework.data.mongodb.repository.Aggregation;
 import org.springframework.stereotype.Repository;
 import java.time.LocalDate;
 import java.math.BigDecimal;
@@ -214,4 +214,51 @@ public interface StockDataRepository extends MongoRepository<StockData, String> 
      * Delete data for specific symbol
      */
     void deleteBySymbol(String symbol);
+
+        /**
+     * Count distinct dates
+     */
+    @Query("db.stock_data.distinct('date').length")
+    
+        /**
+     * Count distinct dates using aggregation
+     */
+    @Aggregation(pipeline = {
+        "{ '$group': { '_id': '$date' } }",
+        "{ '$count': 'totalDates' }"
+    })
+    Long countDistinctDates();
+
+    /**
+     * Find by date greater than or equal
+     */
+    List<StockData> findByDateGreaterThanEqual(LocalDate date);
+
+    /**
+     * Find by symbol and date greater than or equal
+     */
+    List<StockData> findBySymbolAndDateGreaterThanEqual(String symbol, LocalDate date);
+
+    /**
+     * Find by date range
+     */
+    List<StockData> findByDateBetween(LocalDate fromDate, LocalDate toDate);
+
+    /**
+     * Find with moving averages after date
+     */
+    List<StockData> findByDateGreaterThanEqualAndMovingAverage100DayIsNotNull(LocalDate date);
+
+    /**
+     * Find by date and percentage change greater than
+     */
+    List<StockData> findByDateGreaterThanEqualAndPercentageChangeGreaterThanEqual(LocalDate date, BigDecimal percentage);
+
+    /**
+     * Find by date and percentage change less than
+     */
+    List<StockData> findByDateGreaterThanEqualAndPercentageChangeLessThanEqual(LocalDate date, BigDecimal percentage);
+
+    
+
 }

@@ -1,6 +1,7 @@
 package com.stockanalysis.service;
 
 import com.stockanalysis.model.JobExecution;
+
 import com.stockanalysis.repository.JobExecutionRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -11,6 +12,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
 public class JobExecutionService {
@@ -247,5 +249,41 @@ public class JobExecutionService {
             return String.format("JobExecutionStats{jobName='%s', status='%s', lastRun=%s, health='%s'}", 
                                jobName, status, lastRun, health);
         }
+    }
+
+        /**
+     * Get last job execution
+     */
+    
+    public JobExecution getLastJobExecution() {
+        return jobExecutionRepository.findTopByOrderByLastRunDesc();
+    }
+
+    /**
+     * Get recent jobs (limited)
+     */
+    public List<JobExecution> getRecentJobs(int limit) {
+        if (limit <= 10) {
+            return jobExecutionRepository.findTop10ByOrderByLastRunDesc();
+        } else {
+            return jobExecutionRepository.findAllByOrderByLastRunDesc()
+                .stream()
+                .limit(limit)
+                .collect(Collectors.toList());
+        }
+    }
+
+    /**
+     * Get all jobs
+     */
+    public List<JobExecution> getAllJobs() {
+        return jobExecutionRepository.findAllByOrderByLastRunDesc();
+    }
+
+    /**
+     * Get running jobs
+     */
+    public List<JobExecution> getRunningJobs() {
+        return jobExecutionRepository.findByStatus("RUNNING");
     }
 }
