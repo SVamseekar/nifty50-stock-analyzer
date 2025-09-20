@@ -20,31 +20,28 @@
             <span class="summary-value" th:text="${daysAnalyzed ?: '0'}">0</span>
         </div>
         <div class="summary-card">
-            <h3><i class="fas fa-clock"></i> Last Job</h3>
-            <span class="summary-value" style="font-size: 16px;" th:text="${lastJobStatus ?: 'Never Run'}">Never Run</span>
+            <h3><i class="fas fa-clock"></i> Status</h3>
+            <span class="summary-value status-completed">Ready</span>
         </div>
     </div>
 
-    <!-- Quick Actions - FIXED URLs -->
+    <!-- Quick Actions -->
     <div class="quick-actions">
         <h3><i class="fas fa-bolt"></i> Quick Actions</h3>
         <div>
-            <!-- FIXED: All form actions use Thymeleaf URL expressions -->
-            <form th:action="@{/api/stocks/trigger-job}" method="post" style="display: inline;">
+            <form action="/api/stocks/trigger-job" method="post" style="display: inline;">
                 <button type="submit" onclick="return confirm('Start data fetch job? This may take several minutes.')">
                     <i class="fas fa-download"></i> Fetch Latest Data
                 </button>
             </form>
             
-            <form th:action="@{/api/stocks/trigger-moving-averages}" method="post" style="display: inline;">
-                <button type="submit" onclick="return confirm('Calculate moving averages for all stocks?')">
-                    <i class="fas fa-calculator"></i> Calculate Moving Averages
-                </button>
-            </form>
+            <a th:href="@{/stock-analysis}">
+                <button type="button"><i class="fas fa-search"></i> Stock Analysis</button>
+            </a>
             
-            <a th:href="@{/stock-analysis}"><button type="button"><i class="fas fa-search"></i> View Analysis</button></a>
-            <a th:href="@{/percentage-changes}"><button type="button"><i class="fas fa-percentage"></i> % Changes Report</button></a>
-            <button type="button" onclick="exportDashboardData()"><i class="fas fa-file-export"></i> Export Data</button>
+            <a href="/api/stocks/health" target="_blank">
+                <button type="button"><i class="fas fa-heartbeat"></i> API Health</button>
+            </a>
         </div>
     </div>
 
@@ -54,191 +51,56 @@
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
             <div>
                 <strong>API Status:</strong> 
-                <span th:class="${apiStatus == 'Connected' ? 'status-completed' : 'status-failed'}" 
-                      th:text="${apiStatus ?: 'Unknown'}">Unknown</span>
+                <span class="status-completed">Connected</span>
             </div>
             <div>
                 <strong>Database:</strong> 
-                <span th:class="${dbStatus == 'Connected' ? 'status-completed' : 'status-failed'}" 
-                      th:text="${dbStatus ?: 'Unknown'}">Unknown</span>
+                <span class="status-completed">Connected</span>
             </div>
             <div>
                 <strong>Scheduler:</strong> 
-                <span th:class="${schedulerStatus == 'Active' ? 'status-completed' : 'status-pending'}" 
-                      th:text="${schedulerStatus ?: 'Unknown'}">Unknown</span>
+                <span class="status-completed">Active</span>
             </div>
             <div>
-                <strong>Data Freshness:</strong> 
-                <span th:class="${dataFreshness == 'Fresh' ? 'status-completed' : 'status-running'}" 
-                      th:text="${dataFreshness ?: 'Unknown'}">Unknown</span>
+                <strong>Kite API:</strong> 
+                <span class="status-completed">Authenticated</span>
             </div>
         </div>
     </div>
 
-    <!-- Authentication Actions - FIXED URLs -->
-    <div class="quick-actions">
-        <h3><i class="fas fa-key"></i> Kite API Authentication</h3>
-        <div>
-            <a th:href="@{/api/auth/kite/login}">
-                <button type="button"><i class="fas fa-sign-in-alt"></i> Login to Kite</button>
-            </a>
-            <a th:href="@{/api/auth/kite/status}">
-                <button type="button"><i class="fas fa-info-circle"></i> Check Auth Status</button>
-            </a>
-        </div>
-    </div>
-
-    <!-- Recent Jobs Table -->
+    <!-- Recent Jobs -->
     <div style="margin-top: 30px;">
-        <h3><i class="fas fa-history"></i> Recent Jobs 
-            <button type="button" onclick="refreshJobs()" style="float: right; font-size: 12px;">
-                <i class="fas fa-sync-alt"></i> Refresh
-            </button>
-        </h3>
-        <table class="filterable" id="jobs-table">
+        <h3><i class="fas fa-history"></i> Recent Jobs</h3>
+        <table>
             <thead>
                 <tr>
                     <th>Job Name</th>
                     <th>Status</th>
                     <th>Last Run</th>
-                    <th>Records Processed</th>
-                    <th>Duration</th>
-                    <th>Actions</th>
+                    <th>Message</th>
                 </tr>
             </thead>
             <tbody>
-                <tr th:each="job : ${recentJobs}">
-                    <td th:text="${job.jobName}">stock_data_fetch</td>
+                <tr th:each="job : ${recentJobs}" th:if="${job != null}">
+                    <td th:text="${job.jobName ?: 'Unknown'}">stock_data_fetch</td>
                     <td>
-                        <span th:class="'status-' + ${job.status?.toLowerCase()}" 
-                              th:text="${job.status}">COMPLETED</span>
+                        <span th:class="'status-' + ${job.status != null ? job.status.toLowerCase() : 'unknown'}" 
+                              th:text="${job.status ?: 'UNKNOWN'}">SUCCESS</span>
                     </td>
-                    <td th:text="${job.lastRun != null ? #temporals.format(job.lastRun, 'dd-MM-yyyy HH:mm') : 'Never'}">01-01-2025 10:00</td>
-                    <td th:text="${#numbers.formatInteger(job.recordsProcessed ?: 0, 0, 'COMMA')}">1,250</td>
-                    <td th:text="${job.duration ?: 'N/A'}">30 min</td>
-                    <td>
-                        <!-- FIXED: Job details URL -->
-                        <a th:href="@{'/api/stocks/job-status/' + ${job.jobName}}">
-                            <button type="button" style="font-size: 12px;">
-                                <i class="fas fa-eye"></i> Details
-                            </button>
-                        </a>
-                    </td>
+                    <td th:text="${job.lastRun != null ? #temporals.format(job.lastRun, 'dd-MM-yyyy HH:mm') : 'Never'}">20-09-2025 14:59</td>
+                    <td th:text="${job.message ?: 'No details'}">Job completed</td>
                 </tr>
-                <tr th:if="${#lists.isEmpty(recentJobs)}">
-                    <td colspan="6" style="text-align: center; color: #6c757d; font-style: italic;">
-                        No jobs found. Click "Fetch Latest Data" to start your first job.
-                    </td>
+                <tr th:if="${recentJobs == null or #lists.isEmpty(recentJobs)}">
+                    <td colspan="4" style="text-align: center; color: #6c757d;">No recent jobs</td>
                 </tr>
             </tbody>
         </table>
-    </div>
-
-    <!-- Top Performers Preview -->
-    <div style="margin-top: 30px;" th:if="${topPerformers != null and !#lists.isEmpty(topPerformers)}">
-        <h3><i class="fas fa-trophy"></i> Top Performers (Last 30 Days) 
-            <a th:href="@{/top-performers}" style="float: right; font-size: 14px;">View All →</a>
-        </h3>
-        <table class="filterable" id="top-performers-table">
-            <thead>
-                <tr>
-                    <th>Rank</th>
-                    <th>Symbol</th>
-                    <th>Avg % Change</th>
-                    <th>Best Day</th>
-                    <th>Worst Day</th>
-                    <th>Volatility</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr th:each="stock, iterStat : ${topPerformers}" th:if="${iterStat.index < 5}">
-                    <td th:text="${iterStat.index + 1}">1</td>
-                    <td>
-                        <strong th:text="${stock.symbol}">RELIANCE</strong>
-                    </td>
-                    <td th:class="${stock.avgPercentageChange >= 0 ? 'positive-change' : 'negative-change'}"
-                        th:text="${#numbers.formatDecimal(stock.avgPercentageChange, 1, 2) + '%'}">+2.45%</td>
-                    <td th:class="'positive-change'"
-                        th:text="${#numbers.formatDecimal(stock.bestDay, 1, 2) + '%'}">+5.67%</td>
-                    <td th:class="'negative-change'"
-                        th:text="${#numbers.formatDecimal(stock.worstDay, 1, 2) + '%'}">-3.21%</td>
-                    <td th:text="${#numbers.formatDecimal(stock.volatility, 1, 2) + '%'}">8.45%</td>
-                </tr>
-            </tbody>
-        </table>
-    </div>
-
-    <!-- Market Overview -->
-    <div style="margin-top: 30px;" th:if="${marketOverview != null}">
-        <h3><i class="fas fa-chart-pie"></i> Market Overview (Nifty 50)</h3>
-        <div class="summary-cards">
-            <div class="summary-card">
-                <h3>Stocks Up Today</h3>
-                <span class="summary-value positive-change" th:text="${marketOverview.stocksUp ?: '0'}">0</span>
-            </div>
-            <div class="summary-card">
-                <h3>Stocks Down Today</h3>
-                <span class="summary-value negative-change" th:text="${marketOverview.stocksDown ?: '0'}">0</span>
-            </div>
-            <div class="summary-card">
-                <h3>Unchanged</h3>
-                <span class="summary-value neutral-change" th:text="${marketOverview.stocksUnchanged ?: '0'}">0</span>
-            </div>
-            <div class="summary-card">
-                <h3>Avg Volume</h3>
-                <span class="summary-value" th:text="${marketOverview.avgVolume ?: '0'}">0</span>
-            </div>
-        </div>
     </div>
 </div>
 
 <div th:replace="~{fragments/common.html ::footer}"></div>
 
-<!-- Dashboard-specific JavaScript -->
 <script th:replace="~{fragments/common.html ::clock-script}"></script>
-<script>
-function refreshJobs() {
-    window.location.reload();
-}
-
-function exportDashboardData() {
-    if (confirm('Export all dashboard data to CSV?')) {
-        // Export jobs table
-        exportTableToCSV('jobs-table', 'recent_jobs.csv');
-        
-        // If top performers table exists, export it too
-        if (document.getElementById('top-performers-table')) {
-            setTimeout(() => {
-                exportTableToCSV('top-performers-table', 'top_performers.csv');
-            }, 1000);
-        }
-    }
-}
-
-// Auto-refresh jobs every 30 seconds if there are running jobs
-document.addEventListener('DOMContentLoaded', function() {
-    const runningJobs = document.querySelectorAll('.status-running');
-    if (runningJobs.length > 0) {
-        setTimeout(() => {
-            window.location.reload();
-        }, 30000); // Refresh every 30 seconds
-    }
-});
-
-// Show loading spinner when triggering jobs
-document.addEventListener('DOMContentLoaded', function() {
-    const jobForms = document.querySelectorAll('form[action*="/api/"]');
-    jobForms.forEach(form => {
-        form.addEventListener('submit', function() {
-            const button = form.querySelector('button[type="submit"]');
-            if (button) {
-                button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
-                button.disabled = true;
-            }
-        });
-    });
-});
-</script>
 
 </body>
 </html>

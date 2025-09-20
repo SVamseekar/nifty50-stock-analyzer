@@ -15,7 +15,6 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.*;
 import java.util.stream.Collectors;
-import java.util.ArrayList;
 
 /**
  * FIXED: Enhanced Stock Data Service with proper Kite API integration
@@ -838,21 +837,7 @@ public class StockDataService {
      */
     public long getTotalDataPointsCount() {
         return stockDataRepository.count();
-    }
-
-    /**
-     * Get count of unique days analyzed
-     */
-    public long getDaysAnalyzedCount() {
-        try {
-            Long count = stockDataRepository.countDistinctDates();
-            return count != null ? count : 0L;
-        } catch (Exception e) {
-            // Fallback: estimate based on total records
-            return Math.max(1, stockDataRepository.count() / 50); // Assuming 50 stocks
-        }
-    }
-    
+    } 
 
     /**
      * Get stock data after a specific date
@@ -972,6 +957,22 @@ public class StockDataService {
         return result.stream()
             .sorted((a, b) -> b.getDate().compareTo(a.getDate()))
             .collect(Collectors.toList());
+    }
+
+        /**
+     * Get count of unique days analyzed
+     */
+    public long getDaysAnalyzedCount() {
+        try {
+            Long count = stockDataRepository.countDistinctDates();
+            return count != null ? count : 0L;
+        } catch (Exception e) {
+            logger.warn("Could not get distinct dates count, using fallback calculation: {}", e.getMessage());
+            // Fallback: estimate based on total records divided by number of stocks
+            long totalRecords = stockDataRepository.count();
+            int numberOfStocks = NIFTY50_INSTRUMENTS.size();
+            return numberOfStocks > 0 ? Math.max(1, totalRecords / numberOfStocks) : 0L;
+        }
     }
 
 }

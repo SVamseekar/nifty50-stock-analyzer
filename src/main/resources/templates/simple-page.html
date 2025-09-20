@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:insert="~{fragments/header.html}"></head>
+<body>
+<div th:replace="~{fragments/common.html ::common ('Page Under Construction')}"></div>
+
+<div style="text-align: center; padding: 50px;">
+    <h2><i class="fas fa-construction"></i> Page Under Construction</h2>
+    <p th:text="${message}">This page is being developed.</p>
+    <br>
+    <a th:href="@{/dashboard}">
+        <button type="button">
+            <i class="fas fa-arrow-left"></i> Back to Dashboard
+        </button>
+    </a>
+</div>
+
+<div th:replace="~{fragments/common.html ::footer}"></div>
+</body>
+</html>
