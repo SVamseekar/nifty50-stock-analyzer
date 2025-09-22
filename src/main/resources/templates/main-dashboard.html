@@ -137,23 +137,7 @@
             </div>
             
         </form>
-        
-        <!-- Data Management Section -->
-        <div class="data-management">
-            <h4>Data Management:</h4>
-            <div class="button-group">
-                <a href="/api/stocks/trigger-job" onclick="return confirm('Fetch latest stock data? This may take a few minutes.')" class="btn btn-success">
-                    Fetch Latest Data
-                </a>
-                <a href="/api/stocks/trigger-moving-averages" onclick="return confirm('Calculate moving averages? This may take a moment.')" class="btn btn-info">
-                    Calculate Moving Averages
-                </a>
-                <span style="margin-left: 20px; color: #6c757d; font-weight: bold;">
-                    Showing <span th:text="${stockData != null ? #lists.size(stockData) : 0}">0</span> results
-                </span>
-            </div>
-        </div>
-        
+             
         <!-- Automated Data Fetching Info -->
         <div class="cron-info">
             <h4>Automated Data Fetching</h4>
