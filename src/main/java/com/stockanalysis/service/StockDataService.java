@@ -15,6 +15,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import org.bson.Document;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.*;
@@ -31,6 +32,20 @@ public class StockDataService {
     
     private static final Logger logger = LoggerFactory.getLogger(StockDataService.class);
     
+    private static final Set<String> INDIAN_MARKET_HOLIDAYS = Set.of(
+        "2025-01-26", // Republic Day
+        "2025-03-14", // Holi
+        "2025-04-18", // Good Friday
+        "2025-05-01", // Maharashtra Day
+        "2025-08-15", // Independence Day
+        "2025-10-02", // Gandhi Jayanti
+        "2025-10-20", // Dussehra
+        "2025-11-01", // Diwali
+        "2025-11-14", // Guru Nanak Jayanti
+        "2025-12-25"  // Christmas
+    );
+
+
     @Autowired
     private KiteApiService kiteApiService;
     
@@ -51,9 +66,6 @@ public class StockDataService {
     
     @Value("${app.use.real.data:false}")
     private boolean useRealData;
-    
-    @Value("${app.mock.data.enabled:true}")
-    private boolean mockDataEnabled;
     
     @Value("${app.nifty50.auto.fetch:true}")
     private boolean autoFetchEnabled;
@@ -275,18 +287,7 @@ public class StockDataService {
             
             return normalizedData.stream()
                 .filter(stock -> {
-                    if (maSignal100 != null && !maSignal100.equals("ALL")) {
-                        if (!maSignal100.equals(stock.getMaSignal100())) {
-                            return false;
-                        }
-                    }
-                    
-                    if (maSignal200 != null && !maSignal200.equals("ALL")) {
-                        if (!maSignal200.equals(stock.getMaSignal200())) {
-                            return false;
-                        }
-                    }
-                    
+                                   
                     if (goldenCross != null && !goldenCross.equals("ALL")) {
                         if (!goldenCross.equals(stock.getGoldenCross())) {
                             return false;
@@ -358,213 +359,57 @@ public class StockDataService {
         }
     }
     
-    // REST OF THE METHODS REMAIN THE SAME AS YOUR ORIGINAL FILE
-    
+        /**
+     * Daily cron job - fetches only today's data since historical data already exists
+     * Runs at 7:00 PM IST on weekdays, automatically skips weekends and holidays
+     */
     @Scheduled(cron = "0 0 19 * * MON-FRI", zone = "Asia/Kolkata")
-    public void scheduledDataFetch() {
+    public void scheduledDailyDataFetch() {
         if (!schedulerEnabled) {
-            logger.info("Scheduler disabled, skipping scheduled data fetch");
+            logger.info("Scheduler disabled, skipping daily data fetch");
             return;
         }
         
-        logger.info("Starting scheduled daily data fetch at {}", LocalDate.now());
+        LocalDate today = LocalDate.now();
+        logger.info("Cron job triggered at {} for date: {}", LocalDateTime.now(), today);
         
         try {
-            Optional<LocalDate> lastRunDate = jobExecutionService.getLastSuccessfulRunDate("DAILY_STOCK_FETCH");
-            LocalDate fromDate = lastRunDate.orElse(LocalDate.now().minusDays(5));
-            LocalDate toDate = LocalDate.now();
-            
-            logger.info("Fetching data from {} to {}", fromDate, toDate);
-            
-            int recordsProcessed = fetchAllHistoricalData(fromDate, toDate);
-            
-            if (movingAveragesEnabled && recordsProcessed > 0) {
-                logger.info("Calculating moving averages for recent data...");
-                movingAverageService.calculateMovingAveragesForRecentData(fromDate);
+            // Check if market is open (skip holidays)
+            if (INDIAN_MARKET_HOLIDAYS.contains(today.toString())) {
+                logger.info("Market holiday detected ({}), skipping data fetch", today);
+                return;
             }
             
-            logger.info("Scheduled job completed: {} records processed", recordsProcessed);
+            // Check if weekend (this shouldn't happen due to cron schedule, but safety check)
+            if (today.getDayOfWeek().getValue() >= 6) {
+                logger.info("Weekend detected ({}), skipping data fetch", today);
+                return;
+            }
+            
+            logger.info("Market is open, fetching today's data for: {}", today);
+            
+            // Fetch today's stock data
+            int recordsProcessed = fetchTodaysStockData(today);
+            
+            // Calculate moving averages if data was processed
+            if (movingAveragesEnabled && recordsProcessed > 0) {
+                logger.info("Calculating moving averages for recent data...");
+                movingAverageService.calculateMovingAveragesForRecentData(today.minusDays(1));
+            }
+            
+            // Record successful job completion
+            String message = String.format("Successfully processed %d records for %s. Moving averages: %s", 
+                                        recordsProcessed, today, movingAveragesEnabled ? "CALCULATED" : "DISABLED");
+            jobExecutionService.recordJobCompletion("DAILY_STOCK_FETCH", "SUCCESS", message);
+            
+            logger.info("Daily job completed successfully: {} records processed", recordsProcessed);
             
         } catch (Exception e) {
-            logger.error("Scheduled job failed: {}", e.getMessage(), e);
+            logger.error("Daily job failed: {}", e.getMessage(), e);
             jobExecutionService.recordJobError("DAILY_STOCK_FETCH", e);
         }
     }
-    
-    public int fetchAllHistoricalData(LocalDate fromDate, LocalDate toDate) {
-        String jobName = "DAILY_STOCK_FETCH_WITH_MA";
-        jobExecutionService.recordJobStart(jobName);
-        
-        int totalRecordsProcessed = 0;
-        int successfulStocks = 0;
-        int failedStocks = 0;
-        List<String> failedSymbols = new ArrayList<>();
-        
-        try {
-            logger.info("Starting Nifty 50 data fetch for {} stocks from {} to {}", 
-                       NIFTY50_INSTRUMENTS.size(), fromDate, toDate);
-            
-            if (!useRealData) {
-                logger.warn("Real data disabled in configuration. Using mock data.");
-                totalRecordsProcessed = generateMockData(fromDate, toDate);
-            } else if (!kiteAuthService.isAuthenticated()) {
-                logger.error("Kite API not authenticated. Please authenticate first.");
-                totalRecordsProcessed = generateMockData(fromDate, toDate);
-            } else {
-                boolean connectionOk = kiteApiService.testConnection();
-                if (!connectionOk) {
-                    logger.error("Kite API connection test failed. Check authentication.");
-                    throw new RuntimeException("Kite API connection failed");
-                }
-                
-                logger.info("Kite API authenticated and connected. Fetching real data...");
-                
-                for (Map.Entry<String, String> entry : NIFTY50_INSTRUMENTS.entrySet()) {
-                    String symbol = entry.getKey();
-                    String instrumentToken = entry.getValue();
-                    
-                    try {
-                        logger.debug("Processing {}: {}", symbol, instrumentToken);
-                        
-                        int recordsForSymbol = fetchAndProcessHistoricalData(symbol, instrumentToken, fromDate, toDate);
-                        
-                        if (recordsForSymbol > 0) {
-                            totalRecordsProcessed += recordsForSymbol;
-                            successfulStocks++;
-                            logger.debug("{} - {} records processed", symbol, recordsForSymbol);
-                        } else {
-                            logger.warn("{} - No records processed", symbol);
-                            failedStocks++;
-                            failedSymbols.add(symbol);
-                        }
-                        
-                        kiteApiService.rateLimit();
-                        
-                    } catch (Exception e) {
-                        logger.error("Failed to process {}: {}", symbol, e.getMessage());
-                        failedStocks++;
-                        failedSymbols.add(symbol);
-                    }
-                }
-            }
-            
-            if (movingAveragesEnabled && totalRecordsProcessed > 0) {
-                logger.info("Calculating moving averages for all updated stocks...");
-                try {
-                    movingAverageService.calculateMovingAveragesForAllStocks();
-                    logger.info("Moving averages calculation completed");
-                } catch (Exception e) {
-                    logger.error("Moving averages calculation failed: {}", e.getMessage());
-                }
-            }
-            
-            String message = String.format(
-                "Successfully processed %d stocks, %d failed. Total records: %d. Moving averages: %s. Failed symbols: %s", 
-                successfulStocks, failedStocks, totalRecordsProcessed,
-                movingAveragesEnabled ? "CALCULATED" : "DISABLED",
-                failedSymbols.isEmpty() ? "None" : String.join(", ", failedSymbols)
-            );
-            
-            jobExecutionService.recordJobCompletion(jobName, "SUCCESS", message);
-            logger.info("Data fetch completed: {}", message);
-            
-            return totalRecordsProcessed;
-            
-        } catch (Exception e) {
-            logger.error("Fatal error in data fetch job: {}", e.getMessage(), e);
-            jobExecutionService.recordJobError(jobName, e);
-            throw new RuntimeException("Data fetch job failed", e);
-        }
-    }
-    
-    private int fetchAndProcessHistoricalData(String symbol, String instrumentToken, 
-                                            LocalDate fromDate, LocalDate toDate) {
-        try {
-            logger.debug("Fetching data for {}: {}", symbol, instrumentToken);
-            
-            if (!kiteApiService.isValidInstrumentToken(instrumentToken)) {
-                logger.error("Invalid instrument token for {}: {}", symbol, instrumentToken);
-                return 0;
-            }
-            
-            JsonNode historicalData = kiteApiService.fetchHistoricalData(instrumentToken, fromDate, toDate);
-            
-            if (historicalData == null) {
-                logger.warn("No data received from Kite API for {}", symbol);
-                return 0;
-            }
-            
-            if (!historicalData.isArray() || historicalData.size() == 0) {
-                logger.warn("Empty or invalid data array for {}", symbol);
-                return 0;
-            }
-            
-            logger.debug("Processing {} days of data for {}", historicalData.size(), symbol);
-            
-            int recordsProcessed = 0;
-            List<StockData> stockDataList = new ArrayList<>();
-            StockData previousDayData = null;
-            
-            for (JsonNode dayData : historicalData) {
-                try {
-                    StockData stockData = parseKiteApiData(symbol, dayData);
-                    
-                    if (stockData != null) {
-                        if (previousDayData != null) {
-                            BigDecimal percentageChange = calculatePercentageChange(
-                                previousDayData.getClosingPrice(), 
-                                stockData.getClosingPrice()
-                            );
-                            stockData.setPercentageChange(percentageChange);
-                        } else {
-                            stockData.setPercentageChange(BigDecimal.ZERO);
-                        }
-                        
-                        stockDataList.add(stockData);
-                        previousDayData = stockData;
-                        recordsProcessed++;
-                    }
-                    
-                } catch (Exception e) {
-                    logger.warn("Failed to parse day data for {}: {}", symbol, e.getMessage());
-                }
-            }
-            
-            if (!stockDataList.isEmpty()) {
-                try {
-                    for (StockData stockData : stockDataList) {
-                        Optional<StockData> existing = stockDataRepository
-                            .findBySymbolAndDate(stockData.getSymbol(), stockData.getDate());
-                        
-                        if (existing.isPresent()) {
-                            StockData existingData = existing.get();
-                            existingData.setOpenPrice(stockData.getOpenPrice());
-                            existingData.setHighPrice(stockData.getHighPrice());
-                            existingData.setLowPrice(stockData.getLowPrice());
-                            existingData.setClosingPrice(stockData.getClosingPrice());
-                            existingData.setVolume(stockData.getVolume());
-                            existingData.setPercentageChange(stockData.getPercentageChange());
-                            existingData.setUpdatedAt(LocalDate.now());
-                            stockDataRepository.save(existingData);
-                        } else {
-                            stockDataRepository.save(stockData);
-                        }
-                    }
-                    logger.debug("Saved/Updated {} records for {}", stockDataList.size(), symbol);
-                } catch (Exception e) {
-                    logger.error("Database error saving data for {}: {}", symbol, e.getMessage());
-                    throw e;
-                }
-            }
-            
-            return recordsProcessed;
-            
-        } catch (Exception e) {
-            logger.error("Error processing historical data for {}: {}", symbol, e.getMessage());
-            throw new RuntimeException("Failed to process " + symbol, e);
-        }
-    }
-    
+      
     private StockData parseKiteApiData(String symbol, JsonNode dayData) {
         try {
             if (!dayData.isArray()) {
@@ -857,63 +702,6 @@ public class StockDataService {
         return stats;
     }
     
-    private int generateMockData(LocalDate fromDate, LocalDate toDate) {
-        if (!mockDataEnabled) {
-            logger.info("Mock data disabled, skipping data generation");
-            return 0;
-        }
-        
-        logger.info("Generating mock data for {} stocks from {} to {}", 
-                   NIFTY50_INSTRUMENTS.size(), fromDate, toDate);
-        
-        Random random = new Random();
-        int totalRecords = 0;
-        
-        for (String symbol : NIFTY50_INSTRUMENTS.keySet()) {
-            BigDecimal basePrice = BigDecimal.valueOf(1000 + random.nextInt(4000));
-            LocalDate currentDate = fromDate;
-            
-            while (!currentDate.isAfter(toDate)) {
-                if (isWeekend(currentDate)) {
-                    currentDate = currentDate.plusDays(1);
-                    continue;
-                }
-                
-                BigDecimal volatility = BigDecimal.valueOf(0.02 + random.nextGaussian() * 0.01);
-                BigDecimal change = basePrice.multiply(volatility);
-                
-                BigDecimal open = basePrice.add(change.multiply(BigDecimal.valueOf(random.nextGaussian() * 0.5)));
-                BigDecimal close = open.add(change.multiply(BigDecimal.valueOf(random.nextGaussian())));
-                BigDecimal high = close.max(open).add(change.multiply(BigDecimal.valueOf(Math.abs(random.nextGaussian() * 0.3))));
-                BigDecimal low = close.min(open).subtract(change.multiply(BigDecimal.valueOf(Math.abs(random.nextGaussian() * 0.3))));
-                
-                Long volume = 100000L + random.nextInt(900000);
-                BigDecimal percentageChange = calculatePercentageChange(basePrice, close);
-                
-                StockData stockData = new StockData(symbol, currentDate, 
-                    open.setScale(2, RoundingMode.HALF_UP),
-                    high.setScale(2, RoundingMode.HALF_UP),
-                    low.setScale(2, RoundingMode.HALF_UP),
-                    close.setScale(2, RoundingMode.HALF_UP),
-                    volume, percentageChange);
-                
-                try {
-                    if (!stockDataRepository.existsBySymbolAndDate(symbol, currentDate)) {
-                        stockDataRepository.save(stockData);
-                        totalRecords++;
-                    }
-                    basePrice = close;
-                } catch (Exception e) {
-                    logger.debug("Error saving mock data for {} on {}: {}", symbol, currentDate, e.getMessage());
-                }
-                
-                currentDate = currentDate.plusDays(1);
-            }
-        }
-        
-        logger.info("Generated {} mock records", totalRecords);
-        return totalRecords;
-    }
     
     private boolean isWeekend(LocalDate date) {
         return date.getDayOfWeek().getValue() >= 6;
@@ -1040,6 +828,174 @@ public class StockDataService {
     
     public boolean isKiteAuthenticated() {
         return kiteAuthService.isAuthenticated();
+    }
+
+        /**
+     * Fetch today's stock data for all Nifty 50 stocks
+     * Simple implementation since historical data already exists
+     */
+    private int fetchTodaysStockData(LocalDate date) {
+        String jobName = "DAILY_STOCK_FETCH";
+        jobExecutionService.recordJobStart(jobName);
+        
+        int recordsProcessed = 0;
+        int successfulStocks = 0;
+        int failedStocks = 0;
+        List<String> failedSymbols = new ArrayList<>();
+        
+        try {
+            if (!kiteAuthService.isAuthenticated()) {
+                logger.error("Kite API not authenticated. Cannot fetch real data.");
+                return 0;
+            }
+            
+            boolean connectionOk = kiteApiService.testConnection();
+            if (!connectionOk) {
+                logger.error("Kite API connection test failed. Check authentication.");
+                return 0;
+            }
+            
+            logger.info("Fetching data for {} Nifty 50 stocks for date: {}", NIFTY50_INSTRUMENTS.size(), date);
+            
+            for (Map.Entry<String, String> entry : NIFTY50_INSTRUMENTS.entrySet()) {
+                String symbol = entry.getKey();
+                String instrumentToken = entry.getValue();
+                
+                try {
+                    logger.debug("Processing {}: {}", symbol, instrumentToken);
+                    
+                    // Fetch today's data only (not historical range)
+                    int recordsForSymbol = fetchAndProcessDailyData(symbol, instrumentToken, date);
+                    
+                    if (recordsForSymbol > 0) {
+                        recordsProcessed += recordsForSymbol;
+                        successfulStocks++;
+                        logger.debug("{} - {} records processed", symbol, recordsForSymbol);
+                    } else {
+                        logger.warn("{} - No records processed", symbol);
+                        failedStocks++;
+                        failedSymbols.add(symbol);
+                    }
+                    
+                    // Rate limiting
+                    kiteApiService.rateLimit();
+                    
+                } catch (Exception e) {
+                    logger.error("Failed to process {}: {}", symbol, e.getMessage());
+                    failedStocks++;
+                    failedSymbols.add(symbol);
+                }
+            }
+            
+            logger.info("Data fetch completed: {} successful, {} failed. Total records: {}", 
+                    successfulStocks, failedStocks, recordsProcessed);
+            
+            if (!failedSymbols.isEmpty()) {
+                logger.warn("Failed symbols: {}", String.join(", ", failedSymbols));
+            }
+            
+            return recordsProcessed;
+            
+        } catch (Exception e) {
+            logger.error("Fatal error in daily data fetch: {}", e.getMessage(), e);
+            return 0;
+        }
+    }
+
+    /**
+     * Fetch and process data for a single stock for today's date
+     */
+    private int fetchAndProcessDailyData(String symbol, String instrumentToken, LocalDate date) {
+        try {
+            if (!kiteApiService.isValidInstrumentToken(instrumentToken)) {
+                logger.error("Invalid instrument token for {}: {}", symbol, instrumentToken);
+                return 0;
+            }
+            
+            // Fetch today's data (single day)
+            JsonNode historicalData = kiteApiService.fetchHistoricalData(instrumentToken, date, date);
+            
+            if (historicalData == null || !historicalData.isArray() || historicalData.size() == 0) {
+                logger.warn("No data received for {} on {}", symbol, date);
+                return 0;
+            }
+            
+            // Process the single day's data
+            JsonNode dayData = historicalData.get(0);
+            StockData stockData = parseKiteApiData(symbol, dayData);
+            
+            if (stockData != null) {
+                // Calculate percentage change vs previous day
+                Optional<StockData> previousData = stockDataRepository
+                    .findLatestBySymbol(symbol);
+                
+                if (previousData.isPresent()) {
+                    BigDecimal percentageChange = calculatePercentageChange(
+                        previousData.get().getClosingPrice(), 
+                        stockData.getClosingPrice()
+                    );
+                    stockData.setPercentageChange(percentageChange);
+                } else {
+                    stockData.setPercentageChange(BigDecimal.ZERO);
+                }
+                
+                // Save or update the record
+                Optional<StockData> existing = stockDataRepository
+                    .findBySymbolAndDate(stockData.getSymbol(), stockData.getDate());
+                
+                if (existing.isPresent()) {
+                    // Update existing record
+                    StockData existingData = existing.get();
+                    existingData.setOpenPrice(stockData.getOpenPrice());
+                    existingData.setHighPrice(stockData.getHighPrice());
+                    existingData.setLowPrice(stockData.getLowPrice());
+                    existingData.setClosingPrice(stockData.getClosingPrice());
+                    existingData.setVolume(stockData.getVolume());
+                    existingData.setPercentageChange(stockData.getPercentageChange());
+                    existingData.setUpdatedAt(LocalDate.now());
+                    stockDataRepository.save(existingData);
+                } else {
+                    // Insert new record
+                    stockDataRepository.save(stockData);
+                }
+                
+                logger.debug("Saved data for {} on {}: close={}, change={}%", 
+                            symbol, date, stockData.getClosingPrice(), stockData.getPercentageChange());
+                
+                return 1;
+            }
+            
+            return 0;
+            
+        } catch (Exception e) {
+            logger.error("Error processing daily data for {} on {}: {}", symbol, date, e.getMessage());
+            return 0;
+        }
+    }
+
+    /**
+     * Check if a date is a market holiday
+     */
+    public boolean isMarketHoliday(LocalDate date) {
+        return INDIAN_MARKET_HOLIDAYS.contains(date.toString()) || 
+            date.getDayOfWeek().getValue() >= 6;
+    }
+
+    /**
+     * Get next market working day
+     */
+    public LocalDate getNextMarketDay(LocalDate fromDate) {
+        LocalDate nextDay = fromDate.plusDays(1);
+        
+        while (isMarketHoliday(nextDay)) {
+            nextDay = nextDay.plusDays(1);
+            if (nextDay.isAfter(fromDate.plusDays(10))) {
+                logger.warn("Could not find next market day within 10 days of {}", fromDate);
+                break;
+            }
+        }
+        
+        return nextDay;
     }
 
 }

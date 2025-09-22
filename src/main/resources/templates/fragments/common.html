@@ -3,25 +3,26 @@
 
 <div th:fragment="common (pageTitle)">
     <div class="header" th:onclick="|window.location.href='@{/dashboard}'|">
-        <h1>🔹 Nifty 50 Stock Analyzer</h1>
+        <h1>Nifty 50 Stock Analyzer</h1>
         <div class="nifty-value">
-            <p>Analysis Period: 2020-2025 | Status: <span th:text="${analysisStatus ?: 'Ready'}">Ready</span> | 
-               Last Update: <span th:text="${lastUpdateTime ?: 'Never'}">Never</span></p>
+            <p>
+                <strong>Nifty 50:</strong> <span id="nifty-price">Loading...</span> |
+                <strong>Data Source:</strong> <span th:text="${dataSource ?: 'LIVE_KITE_API'}">LIVE_KITE_API</span> |
+                <strong>Status:</strong> 
+                <span th:if="${kiteAuthenticated}" class="status-completed">Connected</span>
+                <span th:unless="${kiteAuthenticated}" class="status-failed">Disconnected</span>
+            </p>
         </div>
     </div>
     <div class="home-menu-buttons">
         <div style="display:flex; flex-wrap: wrap;">
-            <a th:href="@{/dashboard}"><button type="button"><i class="fas fa-tachometer-alt"></i> Dashboard</button></a>
-            <a th:href="@{/stock-analysis}"><button type="button"><i class="fas fa-chart-line"></i> Stock Analysis</button></a>
-            <a th:href="@{/percentage-changes}"><button type="button"><i class="fas fa-percentage"></i> % Changes</button></a>
-            <a th:href="@{/moving-averages}"><button type="button"><i class="fas fa-wave-square"></i> Moving Averages</button></a>
-            <a th:href="@{/job-status}"><button type="button"><i class="fas fa-tasks"></i> Job Status</button></a>
-            <a th:href="@{/top-performers}"><button type="button"><i class="fas fa-trophy"></i> Top Performers</button></a>
-            <a th:href="@{/volatility-analysis}"><button type="button"><i class="fas fa-chart-area"></i> Volatility</button></a>
+            <a th:href="@{/dashboard}"><button type="button"><i class="fas fa-chart-line"></i> Stock Analysis</button></a>
+            <a th:href="@{/api/auth/kite/status}" target="_blank"><button type="button"><i class="fas fa-key"></i> API Status</button></a>
+            <a th:href="@{/api/stocks/health}" target="_blank"><button type="button"><i class="fas fa-heartbeat"></i> System Health</button></a>
         </div>
     </div>
     <div class="page-title">
-        <span th:text="${pageTitle}">Page Title</span>
+        <span th:text="${pageTitle}">Stock Analysis Dashboard</span>
         <span style="float: right; font-size: 14px; font-weight: normal;">
             <i class="fas fa-clock"></i> <span id="current-time"></span>
         </span>
@@ -37,7 +38,7 @@
     </div>
 </div>
 
-<!-- JavaScript for real-time clock -->
+<!-- JavaScript for real-time clock and Nifty price -->
 <script th:fragment="clock-script">
 function updateClock() {
     const now = new Date();
@@ -54,8 +55,32 @@ function updateClock() {
     }
 }
 
+// Live Nifty 50 price update
+function updateNiftyPrice() {
+    fetch('/api/stocks/nifty50-price')
+        .then(response => response.json())
+        .then(data => {
+            const priceElement = document.getElementById('nifty-price');
+            if (priceElement) {
+                priceElement.innerHTML = 
+                    data.price + ' <span style="color: ' + (data.change > 0 ? '#28a745' : '#dc3545') + '">' +
+                    (data.change > 0 ? '+' : '') + data.change + ' (' + data.changePercent + '%)</span>';
+            }
+        })
+        .catch(error => {
+            const priceElement = document.getElementById('nifty-price');
+            if (priceElement) {
+                priceElement.innerHTML = '<span style="color: #6c757d;">Unable to fetch live price</span>';
+            }
+        });
+}
+
 // Update clock immediately and then every second
 updateClock();
 setInterval(updateClock, 1000);
+
+// Update Nifty price immediately and then every 30 seconds
+updateNiftyPrice();
+setInterval(updateNiftyPrice, 30000);
 </script>
 </html>

@@ -27,12 +27,14 @@
         .negative { color: #dc3545; font-weight: bold; }
         #nifty-price { font-weight: bold; font-size: 16px; }
         #current-time { font-weight: bold; }
-        .signal-buy { background-color: #d4edda; color: #155724; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 12px; }
-        .signal-sell { background-color: #f8d7da; color: #721c24; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 12px; }
-        .signal-hold { background-color: #fff3cd; color: #856404; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 12px; }
         .golden-cross { background-color: #d1ecf1; color: #0c5460; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 12px; }
         .death-cross { background-color: #f8d7da; color: #721c24; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 12px; }
         .neutral-cross { background-color: #e2e3e5; color: #383d41; padding: 4px 8px; border-radius: 4px; font-size: 12px; }
+        .signal-strong-buy { background-color: #c3e6cb; color: #155724; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 12px; }
+        .signal-buy { background-color: #d4edda; color: #155724; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 12px; }
+        .signal-hold { background-color: #fff3cd; color: #856404; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 12px; }
+        .signal-sell { background-color: #f8d7da; color: #721c24; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 12px; }
+        .signal-strong-sell { background-color: #f5c6cb; color: #721c24; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 12px; }
         .summary-section { margin-top: 30px; background: #ffffff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
         .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; margin-top: 15px; }
         .summary-item { background: #f8f9fa; padding: 15px; border-radius: 6px; text-align: center; }
@@ -41,6 +43,7 @@
         .button-group { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
         .status-connected { color: #28a745; font-weight: bold; }
         .status-disconnected { color: #dc3545; font-weight: bold; }
+        .cron-info { background: #e7f3ff; padding: 15px; border-radius: 6px; margin-top: 15px; border-left: 4px solid #007bff; }
         
         /* Mobile responsive adjustments */
         @media (max-width: 768px) {
@@ -55,7 +58,7 @@
 
 <!-- Header with Live Nifty Price -->
 <div class="header">
-    <h1>📈 Nifty 50 Stock Analysis Dashboard</h1>
+    <h1>Nifty 50 Stock Analysis Dashboard</h1>
     <div class="nifty-info">
         <strong>Nifty 50:</strong> <span id="nifty-price">Loading...</span> | 
         <strong>Time:</strong> <span id="current-time">Loading...</span> |
@@ -150,11 +153,25 @@
                 </span>
             </div>
         </div>
+        
+        <!-- Automated Data Fetching Info -->
+        <div class="cron-info">
+            <h4>Automated Data Fetching</h4>
+            <p><strong>Daily Cron Job:</strong> Stock data is automatically fetched every day at 7:00 PM IST (after market closes)</p>
+            <p><strong>Next Run:</strong> <span id="next-cron-run">Calculating...</span></p>
+            <p><strong>Status:</strong> 
+                <span th:if="${kiteAuthenticated}" class="status-connected">✅ Active</span>
+                <span th:unless="${kiteAuthenticated}" class="status-disconnected">❌ Requires Authentication</span>
+            </p>
+        </div>
     </div>
 
-    <!-- Results Table - FIXED: Added all three moving averages -->
+    <!-- Results Table - UPDATED: Removed MA Signal Columns -->
     <div>
         <h3>Analysis Results</h3>
+        <p style="color: #6c757d; margin-bottom: 15px;">
+            Showing <strong th:text="${stockData != null ? #lists.size(stockData) : 0}">0</strong> results
+        </p>
         
         <div style="overflow-x: auto;">
             <table>
@@ -168,41 +185,23 @@
                         <th>MA 50</th>
                         <th>MA 100</th>
                         <th>MA 200</th>
-                        <th>50D Signal</th>
-                        <th>100D Signal</th>
                         <th>Golden Cross</th>
                     </tr>
                 </thead>
                 <tbody>
                     <tr th:each="data : ${stockData}" th:if="${stockData != null}">
                         <td><strong th:text="${data.symbol}">RELIANCE</strong></td>
-                        <td th:text="${#temporals.format(data.date, 'dd-MM-yyyy')}">01-01-2025</td>
+                        <!-- FIXED: Date format changed to DD/MM/YYYY -->
+                        <td th:text="${#temporals.format(data.date, 'dd/MM/yyyy')}">18/07/2025</td>
                         <td th:text="${data.closingPrice != null ? #numbers.formatDecimal(data.closingPrice, 1, 2) : 'N/A'}">2530.00</td>
                         <td th:class="${data.percentageChange != null && data.percentageChange.doubleValue() > 0 ? 'positive' : 'negative'}"
                             th:text="${data.percentageChange != null ? ((data.percentageChange.doubleValue() >= 0 ? '+' : '') + #numbers.formatDecimal(data.percentageChange, 1, 2) + '%') : 'N/A'}">+2.45%</td>
                         <td th:text="${data.volume != null ? #numbers.formatInteger(data.volume, 0, 'COMMA') : 'N/A'}">1,234,567</td>
                         
-                        <!-- FIXED: Added 50-day MA column -->
+                        <!-- Moving Averages (keeping these) -->
                         <td th:text="${data.movingAverage50Day != null ? #numbers.formatDecimal(data.movingAverage50Day, 1, 2) : 'N/A'}">2500.25</td>
-                        
                         <td th:text="${data.movingAverage100Day != null ? #numbers.formatDecimal(data.movingAverage100Day, 1, 2) : 'N/A'}">2480.50</td>
                         <td th:text="${data.movingAverage200Day != null ? #numbers.formatDecimal(data.movingAverage200Day, 1, 2) : 'N/A'}">2450.75</td>
-                        
-                        <!-- FIXED: Added 50-day MA signal column -->
-                        <td>
-                            <span th:if="${data.maSignal50 != null}" 
-                                  th:class="'signal-' + ${data.maSignal50.toLowerCase()}" 
-                                  th:text="${data.maSignal50}">BUY</span>
-                            <span th:if="${data.maSignal50 == null}">N/A</span>
-                        </td>
-                        
-                        <!-- 100-day MA signal -->
-                        <td>
-                            <span th:if="${data.maSignal100 != null}" 
-                                  th:class="'signal-' + ${data.maSignal100.toLowerCase()}" 
-                                  th:text="${data.maSignal100}">BUY</span>
-                            <span th:if="${data.maSignal100 == null}">N/A</span>
-                        </td>
                         
                         <!-- Golden Cross -->
                         <td>
@@ -215,14 +214,14 @@
                     
                     <!-- No Data Row -->
                     <tr th:if="${stockData == null or #lists.isEmpty(stockData)}">
-                        <td colspan="11" style="text-align: center; color: #6c757d; font-style: italic; padding: 40px;">
+                        <td colspan="9" style="text-align: center; color: #6c757d; font-style: italic; padding: 40px;">
                             <div style="font-size: 18px; margin-bottom: 10px;">No data found</div>
                             <span th:if="${!kiteAuthenticated}">
-                                Please authenticate with Kite Connect to fetch real stock data.<br>
+                                Please authenticate with Kite Connect to enable automatic data fetching.<br>
                                 <a href="/api/auth/kite/login" style="color: #007bff; font-weight: bold;">Click here to authenticate</a>
                             </span>
                             <span th:if="${kiteAuthenticated}">
-                                Try different filter criteria or fetch new data using the "Fetch Latest Data" button above.
+                                Try different filter criteria. Data is automatically fetched daily at 7:00 PM IST.
                             </span>
                         </td>
                     </tr>
@@ -257,30 +256,42 @@
 
 <!-- Scripts -->
 <script>
-// Update live Nifty price
+// FIXED: Update live Nifty price without percentage change
 function updateNiftyPrice() {
     fetch('/api/stocks/nifty50-price')
         .then(response => response.json())
         .then(data => {
             const priceElement = document.getElementById('nifty-price');
             if (priceElement) {
-                let color = '#007bff'; // default blue
+                let changeColor = '#007bff'; // default blue
+                
                 if (data.status === 'LIVE' || data.status === 'SAMPLE' || data.status === 'FALLBACK') {
-                    const changeValue = parseFloat(data.change);
-                    color = changeValue > 0 ? '#28a745' : changeValue < 0 ? '#dc3545' : '#007bff';
+                    // Parse the change value to determine color
+                    const changeText = data.change || '0';
+                    const changeValue = parseFloat(changeText.replace(/[+,]/g, ''));
+                    
+                    if (changeValue > 0) {
+                        changeColor = '#28a745'; // green for positive
+                    } else if (changeValue < 0) {
+                        changeColor = '#dc3545'; // red for negative
+                    } else {
+                        changeColor = '#6c757d'; // gray for zero
+                    }
                 }
                 
+                // FIXED: Show only price and change, no percentage
                 priceElement.innerHTML = 
-                    data.price + ' <span style="color: ' + color + '">' +
-                    data.change + ' (' + data.changePercent + ')</span>';
+                    data.price + ' <span style="color: ' + changeColor + '">' +
+                    data.change + '</span>';
             }
         })
         .catch(error => {
+            console.error('Error fetching Nifty price:', error);
             document.getElementById('nifty-price').innerHTML = 'Price unavailable';
         });
 }
 
-// Update clock
+// Update clock with DD/MM/YYYY format
 function updateClock() {
     const now = new Date();
     const timeString = now.toLocaleString('en-IN', {
@@ -288,14 +299,48 @@ function updateClock() {
         hour12: true,
         hour: '2-digit',
         minute: '2-digit',
-        second: '2-digit'
+        second: '2-digit',
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
     });
     document.getElementById('current-time').textContent = timeString;
+}
+
+// Calculate next cron run time (7:00 PM IST)
+function updateNextCronRun() {
+    const now = new Date();
+    const today7PM = new Date();
+    today7PM.setHours(19, 0, 0, 0); // 7:00 PM
+    
+    let nextRun;
+    if (now < today7PM) {
+        nextRun = today7PM; // Today at 7 PM
+    } else {
+        nextRun = new Date(today7PM);
+        nextRun.setDate(nextRun.getDate() + 1); // Tomorrow at 7 PM
+    }
+    
+    const nextRunString = nextRun.toLocaleString('en-IN', {
+        timeZone: 'Asia/Kolkata',
+        weekday: 'long',
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+    
+    const nextCronElement = document.getElementById('next-cron-run');
+    if (nextCronElement) {
+        nextCronElement.textContent = nextRunString;
+    }
 }
 
 // Initialize
 updateClock();
 updateNiftyPrice();
+updateNextCronRun();
 setInterval(updateClock, 1000);
 setInterval(updateNiftyPrice, 30000);
 
