@@ -41,6 +41,14 @@
         .button-group { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
         .status-connected { color: #28a745; font-weight: bold; }
         .status-disconnected { color: #dc3545; font-weight: bold; }
+        
+        /* Mobile responsive adjustments */
+        @media (max-width: 768px) {
+            .content { margin: 10px; }
+            table { font-size: 12px; }
+            th, td { padding: 8px 4px; }
+            .form-row { grid-template-columns: 1fr; }
+        }
     </style>
 </head>
 <body>
@@ -144,7 +152,7 @@
         </div>
     </div>
 
-    <!-- Results Table -->
+    <!-- Results Table - FIXED: Added all three moving averages -->
     <div>
         <h3>Analysis Results</h3>
         
@@ -157,9 +165,11 @@
                         <th>Close Price</th>
                         <th>% Change</th>
                         <th>Volume</th>
+                        <th>MA 50</th>
                         <th>MA 100</th>
                         <th>MA 200</th>
-                        <th>MA Signal</th>
+                        <th>50D Signal</th>
+                        <th>100D Signal</th>
                         <th>Golden Cross</th>
                     </tr>
                 </thead>
@@ -171,14 +181,30 @@
                         <td th:class="${data.percentageChange != null && data.percentageChange.doubleValue() > 0 ? 'positive' : 'negative'}"
                             th:text="${data.percentageChange != null ? ((data.percentageChange.doubleValue() >= 0 ? '+' : '') + #numbers.formatDecimal(data.percentageChange, 1, 2) + '%') : 'N/A'}">+2.45%</td>
                         <td th:text="${data.volume != null ? #numbers.formatInteger(data.volume, 0, 'COMMA') : 'N/A'}">1,234,567</td>
+                        
+                        <!-- FIXED: Added 50-day MA column -->
+                        <td th:text="${data.movingAverage50Day != null ? #numbers.formatDecimal(data.movingAverage50Day, 1, 2) : 'N/A'}">2500.25</td>
+                        
                         <td th:text="${data.movingAverage100Day != null ? #numbers.formatDecimal(data.movingAverage100Day, 1, 2) : 'N/A'}">2480.50</td>
                         <td th:text="${data.movingAverage200Day != null ? #numbers.formatDecimal(data.movingAverage200Day, 1, 2) : 'N/A'}">2450.75</td>
+                        
+                        <!-- FIXED: Added 50-day MA signal column -->
+                        <td>
+                            <span th:if="${data.maSignal50 != null}" 
+                                  th:class="'signal-' + ${data.maSignal50.toLowerCase()}" 
+                                  th:text="${data.maSignal50}">BUY</span>
+                            <span th:if="${data.maSignal50 == null}">N/A</span>
+                        </td>
+                        
+                        <!-- 100-day MA signal -->
                         <td>
                             <span th:if="${data.maSignal100 != null}" 
                                   th:class="'signal-' + ${data.maSignal100.toLowerCase()}" 
                                   th:text="${data.maSignal100}">BUY</span>
                             <span th:if="${data.maSignal100 == null}">N/A</span>
                         </td>
+                        
+                        <!-- Golden Cross -->
                         <td>
                             <span th:if="${data.goldenCross != null}" 
                                   th:class="${data.goldenCross == 'GOLDEN_CROSS' ? 'golden-cross' : (data.goldenCross == 'DEATH_CROSS' ? 'death-cross' : 'neutral-cross')}" 
@@ -189,7 +215,7 @@
                     
                     <!-- No Data Row -->
                     <tr th:if="${stockData == null or #lists.isEmpty(stockData)}">
-                        <td colspan="9" style="text-align: center; color: #6c757d; font-style: italic; padding: 40px;">
+                        <td colspan="11" style="text-align: center; color: #6c757d; font-style: italic; padding: 40px;">
                             <div style="font-size: 18px; margin-bottom: 10px;">No data found</div>
                             <span th:if="${!kiteAuthenticated}">
                                 Please authenticate with Kite Connect to fetch real stock data.<br>

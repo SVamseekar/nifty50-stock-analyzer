@@ -14,11 +14,10 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * ENHANCED: Moving Average Service with Data Normalization Support
- * - Works with normalized data from StockDataService
- * - Handles mixed field formats transparently
- * - Calculates 50, 100, and 200-day moving averages
- * - Generates trading signals and golden cross detection
+ * FIXED: Moving Average Service WITHOUT circular dependency
+ * - Removed dependency on StockDataService
+ * - Direct repository access for data retrieval
+ * - Simplified data normalization logic
  */
 @Service
 public class MovingAverageService {
@@ -28,31 +27,32 @@ public class MovingAverageService {
     @Autowired
     private StockDataRepository stockDataRepository;
     
-    @Autowired
-    private StockDataService stockDataService;
-    
     /**
-     * ENHANCED: Calculate and update moving averages for a specific stock using normalized data
+     * FIXED: Calculate moving averages for a specific stock - NO CIRCULAR DEPENDENCY
      */
     public void calculateMovingAveragesForStock(String symbol) {
         try {
             logger.info("Calculating moving averages for {}", symbol);
             
-            // CRITICAL: Use normalized data instead of raw repository data
-            List<StockData> allData = stockDataService.getNormalizedDataForSymbol(symbol);
+            // Get all data directly from repository and sort by date
+            List<StockData> allData = stockDataRepository.findBySymbol(symbol)
+                .stream()
+                .filter(this::hasValidClosingPrice)  // Filter out invalid data
+                .sorted(Comparator.comparing(StockData::getDate))
+                .collect(Collectors.toList());
             
             if (allData.isEmpty()) {
-                logger.warn("{} has no valid data after normalization", symbol);
+                logger.warn("{} has no valid data", symbol);
                 return;
             }
             
             if (allData.size() < 50) {
-                logger.warn("{} has only {} days of normalized data. Need at least 50 for MA calculation.", 
+                logger.warn("{} has only {} days of data. Need at least 50 for MA calculation.", 
                            symbol, allData.size());
                 return;
             }
             
-            logger.info("Processing {} days of normalized data for {}", allData.size(), symbol);
+            logger.info("Processing {} days of data for {}", allData.size(), symbol);
             
             // Calculate moving averages
             List<StockData> updatedData = new ArrayList<>();
@@ -151,7 +151,16 @@ public class MovingAverageService {
     }
     
     /**
-     * ENHANCED: Generic moving average calculation method
+     * Simple data validation - check if stock has valid closing price
+     */
+    private boolean hasValidClosingPrice(StockData stockData) {
+        return stockData != null && 
+               stockData.getClosingPrice() != null && 
+               stockData.getClosingPrice().compareTo(BigDecimal.ZERO) > 0;
+    }
+    
+    /**
+     * Generic moving average calculation method
      */
     private BigDecimal calculateMovingAverage(List<StockData> data, int currentIndex, int period) {
         if (currentIndex < period - 1) {
@@ -178,7 +187,7 @@ public class MovingAverageService {
     }
     
     /**
-     * ENHANCED: Generate trading signal based on price vs moving average
+     * Generate trading signal based on price vs moving average
      */
     private String generateMASignal(BigDecimal currentPrice, BigDecimal movingAverage) {
         if (currentPrice == null || movingAverage == null) {
@@ -197,7 +206,7 @@ public class MovingAverageService {
     }
     
     /**
-     * ENHANCED: Calculate crossover signals (Golden Cross / Death Cross)
+     * Calculate crossover signals (Golden Cross / Death Cross)
      */
     private void calculateCrossoverSignals(StockData stockData) {
         BigDecimal ma50 = stockData.getMovingAverage50Day();
@@ -224,7 +233,7 @@ public class MovingAverageService {
     }
     
     /**
-     * ENHANCED: Calculate overall trading signal strength
+     * Calculate overall trading signal strength
      */
     private String calculateTradingSignalStrength(StockData stockData) {
         BigDecimal currentPrice = stockData.getClosingPrice();
@@ -289,7 +298,7 @@ public class MovingAverageService {
     }
     
     /**
-     * ENHANCED: Calculate moving averages for all stocks with better progress tracking
+     * Calculate moving averages for all stocks with better progress tracking
      */
     public void calculateMovingAveragesForAllStocks() {
         logger.info("Starting moving average calculation for all stocks");
@@ -306,16 +315,15 @@ public class MovingAverageService {
             
             for (String symbol : symbols) {
                 try {
-                    // Check if symbol has sufficient normalized data
-                    List<StockData> normalizedData = stockDataService.getNormalizedDataForSymbol(symbol);
+                    // Check if symbol has sufficient data
+                    long dataCount = stockDataRepository.countBySymbol(symbol);
                     
-                    if (normalizedData.size() >= 50) {
+                    if (dataCount >= 50) {
                         calculateMovingAveragesForStock(symbol);
                         hasValidData++;
-                        logger.debug("Processed {} - {} normalized records", symbol, normalizedData.size());
+                        logger.debug("Processed {} - {} records", symbol, dataCount);
                     } else {
-                        logger.debug("Skipped {} - only {} normalized records (need 50+)", 
-                                   symbol, normalizedData.size());
+                        logger.debug("Skipped {} - only {} records (need 50+)", symbol, dataCount);
                     }
                     
                     processed++;
@@ -344,7 +352,7 @@ public class MovingAverageService {
     }
     
     /**
-     * ENHANCED: Calculate moving averages for stocks with recent data
+     * Calculate moving averages for stocks with recent data
      */
     public void calculateMovingAveragesForRecentData(LocalDate fromDate) {
         logger.info("Calculating moving averages for data from {}", fromDate);
@@ -360,17 +368,17 @@ public class MovingAverageService {
                     .findBySymbolAndDateBetween(symbol, fromDate, LocalDate.now());
                 
                 if (!recentData.isEmpty()) {
-                    // Check if the symbol has enough total normalized data for MA calculation
-                    List<StockData> normalizedData = stockDataService.getNormalizedDataForSymbol(symbol);
+                    // Check if the symbol has enough total data for MA calculation
+                    long totalData = stockDataRepository.countBySymbol(symbol);
                     
-                    if (normalizedData.size() >= 50) {
-                        logger.info("Updating {} - {} recent records, {} total normalized", 
-                                   symbol, recentData.size(), normalizedData.size());
+                    if (totalData >= 50) {
+                        logger.info("Updating {} - {} recent records, {} total", 
+                                   symbol, recentData.size(), totalData);
                         calculateMovingAveragesForStock(symbol);
                         processed++;
                     } else {
                         logger.debug("Skipped {} - insufficient total data ({} records)", 
-                                   symbol, normalizedData.size());
+                                   symbol, totalData);
                     }
                 }
             }
@@ -384,72 +392,64 @@ public class MovingAverageService {
     }
     
     /**
-     * ENHANCED: Get moving average statistics for a stock with normalization info
+     * Get moving average statistics for a stock
      */
     public Map<String, Object> getMovingAverageStats(String symbol) {
         Map<String, Object> stats = new HashMap<>();
         
         try {
-            // Get raw data count
-            List<StockData> rawData = stockDataRepository.findBySymbol(symbol);
+            List<StockData> symbolData = stockDataRepository.findBySymbol(symbol);
             
-            // Get normalized data count
-            List<StockData> normalizedData = stockDataService.getNormalizedDataForSymbol(symbol);
+            long totalRecords = symbolData.size();
             
-            long totalRawRecords = rawData.size();
-            long totalNormalizedRecords = normalizedData.size();
-            
-            long recordsWith50MA = normalizedData.stream()
+            long recordsWith50MA = symbolData.stream()
                 .filter(d -> d.getMovingAverage50Day() != null)
                 .count();
-            long recordsWith100MA = normalizedData.stream()
+            long recordsWith100MA = symbolData.stream()
                 .filter(d -> d.getMovingAverage100Day() != null)
                 .count();
-            long recordsWith200MA = normalizedData.stream()
+            long recordsWith200MA = symbolData.stream()
                 .filter(d -> d.getMovingAverage200Day() != null)
                 .count();
             
             // Find first MA dates
-            Optional<LocalDate> first50MADate = normalizedData.stream()
+            Optional<LocalDate> first50MADate = symbolData.stream()
                 .filter(d -> d.getMovingAverage50Day() != null)
                 .map(StockData::getDate)
                 .min(LocalDate::compareTo);
             
-            Optional<LocalDate> first100MADate = normalizedData.stream()
+            Optional<LocalDate> first100MADate = symbolData.stream()
                 .filter(d -> d.getMovingAverage100Day() != null)
                 .map(StockData::getDate)
                 .min(LocalDate::compareTo);
             
-            Optional<LocalDate> first200MADate = normalizedData.stream()
+            Optional<LocalDate> first200MADate = symbolData.stream()
                 .filter(d -> d.getMovingAverage200Day() != null)
                 .map(StockData::getDate)
                 .min(LocalDate::compareTo);
             
             stats.put("symbol", symbol);
-            stats.put("totalRawRecords", totalRawRecords);
-            stats.put("totalNormalizedRecords", totalNormalizedRecords);
-            stats.put("normalizationSuccess", totalNormalizedRecords > 0 ? 
-                     (totalNormalizedRecords * 100.0 / totalRawRecords) : 0);
+            stats.put("totalRecords", totalRecords);
             
             stats.put("recordsWith50DayMA", recordsWith50MA);
             stats.put("recordsWith100DayMA", recordsWith100MA);
             stats.put("recordsWith200DayMA", recordsWith200MA);
             
-            stats.put("coverage50DayMA", totalNormalizedRecords > 0 ? 
-                     (recordsWith50MA * 100.0 / totalNormalizedRecords) : 0);
-            stats.put("coverage100DayMA", totalNormalizedRecords > 0 ? 
-                     (recordsWith100MA * 100.0 / totalNormalizedRecords) : 0);
-            stats.put("coverage200DayMA", totalNormalizedRecords > 0 ? 
-                     (recordsWith200MA * 100.0 / totalNormalizedRecords) : 0);
+            stats.put("coverage50DayMA", totalRecords > 0 ? 
+                     (recordsWith50MA * 100.0 / totalRecords) : 0);
+            stats.put("coverage100DayMA", totalRecords > 0 ? 
+                     (recordsWith100MA * 100.0 / totalRecords) : 0);
+            stats.put("coverage200DayMA", totalRecords > 0 ? 
+                     (recordsWith200MA * 100.0 / totalRecords) : 0);
             
             stats.put("first50DayMADate", first50MADate.orElse(null));
             stats.put("first100DayMADate", first100MADate.orElse(null));
             stats.put("first200DayMADate", first200MADate.orElse(null));
             
             // Data sufficiency info
-            stats.put("canCalculate50MA", totalNormalizedRecords >= 50);
-            stats.put("canCalculate100MA", totalNormalizedRecords >= 100);
-            stats.put("canCalculate200MA", totalNormalizedRecords >= 200);
+            stats.put("canCalculate50MA", totalRecords >= 50);
+            stats.put("canCalculate100MA", totalRecords >= 100);
+            stats.put("canCalculate200MA", totalRecords >= 200);
             
             stats.put("timestamp", LocalDate.now());
             
@@ -459,115 +459,6 @@ public class MovingAverageService {
             logger.error("Error getting MA stats for {}: {}", symbol, e.getMessage());
             stats.put("error", e.getMessage());
             return stats;
-        }
-    }
-    
-    /**
-     * ENHANCED: Check data sufficiency with normalization info
-     */
-    public Map<String, Object> checkDataSufficiency(String symbol) {
-        Map<String, Object> result = new HashMap<>();
-        
-        try {
-            List<StockData> rawData = stockDataRepository.findBySymbol(symbol);
-            List<StockData> normalizedData = stockDataService.getNormalizedDataForSymbol(symbol);
-            
-            int totalRawDays = rawData.size();
-            int totalNormalizedDays = normalizedData.size();
-            
-            boolean canCalculate50MA = totalNormalizedDays >= 50;
-            boolean canCalculate100MA = totalNormalizedDays >= 100;
-            boolean canCalculate200MA = totalNormalizedDays >= 200;
-            
-            result.put("symbol", symbol);
-            result.put("totalRawDays", totalRawDays);
-            result.put("totalNormalizedDays", totalNormalizedDays);
-            result.put("normalizationSuccess", totalRawDays > 0 ? 
-                      (totalNormalizedDays * 100.0 / totalRawDays) : 0);
-            
-            result.put("canCalculate50DayMA", canCalculate50MA);
-            result.put("canCalculate100DayMA", canCalculate100MA);
-            result.put("canCalculate200DayMA", canCalculate200MA);
-            
-            result.put("daysNeededFor50MA", canCalculate50MA ? 0 : 50 - totalNormalizedDays);
-            result.put("daysNeededFor100MA", canCalculate100MA ? 0 : 100 - totalNormalizedDays);
-            result.put("daysNeededFor200MA", canCalculate200MA ? 0 : 200 - totalNormalizedDays);
-            
-            if (totalNormalizedDays > 0) {
-                LocalDate earliestDate = normalizedData.stream()
-                    .map(StockData::getDate)
-                    .min(LocalDate::compareTo)
-                    .orElse(null);
-                
-                LocalDate latestDate = normalizedData.stream()
-                    .map(StockData::getDate)
-                    .max(LocalDate::compareTo)
-                    .orElse(null);
-                
-                result.put("earliestNormalizedDate", earliestDate);
-                result.put("latestNormalizedDate", latestDate);
-            }
-            
-            return result;
-            
-        } catch (Exception e) {
-            logger.error("Error checking data sufficiency for {}: {}", symbol, e.getMessage());
-            result.put("error", e.getMessage());
-            return result;
-        }
-    }
-    
-    /**
-     * NEW: Get stocks ready for moving average calculation
-     */
-    public Map<String, Object> getStocksReadyForMA() {
-        Map<String, Object> result = new HashMap<>();
-        
-        try {
-            List<String> symbols = stockDataRepository.findDistinctSymbols();
-            
-            List<String> readyFor50MA = new ArrayList<>();
-            List<String> readyFor100MA = new ArrayList<>();
-            List<String> readyFor200MA = new ArrayList<>();
-            List<String> insufficientData = new ArrayList<>();
-            
-            for (String symbol : symbols) {
-                List<StockData> normalizedData = stockDataService.getNormalizedDataForSymbol(symbol);
-                int dataCount = normalizedData.size();
-                
-                if (dataCount >= 200) {
-                    readyFor200MA.add(symbol);
-                } else if (dataCount >= 100) {
-                    readyFor100MA.add(symbol);
-                } else if (dataCount >= 50) {
-                    readyFor50MA.add(symbol);
-                } else {
-                    insufficientData.add(symbol);
-                }
-            }
-            
-            result.put("totalSymbols", symbols.size());
-            result.put("readyFor50DayMA", readyFor50MA);
-            result.put("readyFor100DayMA", readyFor100MA);
-            result.put("readyFor200DayMA", readyFor200MA);
-            result.put("insufficientData", insufficientData);
-            
-            result.put("readyFor50Count", readyFor50MA.size());
-            result.put("readyFor100Count", readyFor100MA.size());
-            result.put("readyFor200Count", readyFor200MA.size());
-            result.put("insufficientCount", insufficientData.size());
-            
-            result.put("timestamp", LocalDate.now());
-            
-            logger.info("MA Readiness Summary: 50-day={}, 100-day={}, 200-day={}, insufficient={}", 
-                       readyFor50MA.size(), readyFor100MA.size(), readyFor200MA.size(), insufficientData.size());
-            
-            return result;
-            
-        } catch (Exception e) {
-            logger.error("Error getting stocks ready for MA: {}", e.getMessage());
-            result.put("error", e.getMessage());
-            return result;
         }
     }
 }
